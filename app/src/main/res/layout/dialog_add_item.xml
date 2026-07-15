@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <EditText android:id="@+id/itemName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Item Name (e.g. Galaxy S24)"/>
+    <Spinner android:id="@+id/itemCategory" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+    <EditText android:id="@+id/itemVariants" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Variants, comma separated (e.g. 8GB+128GB, 4GB+64GB)" android:layout_marginTop="8dp"/>
+    <EditText android:id="@+id/itemColors" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Colors, comma separated (e.g. Black, Blue)" android:layout_marginTop="8dp"/>
+</LinearLayout>
