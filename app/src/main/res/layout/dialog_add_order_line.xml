@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <Spinner android:id="@+id/lineItemSpinner" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+    <Spinner android:id="@+id/lineVariantSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+    <Spinner android:id="@+id/lineColorSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+    <EditText android:id="@+id/lineQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Quantity" android:inputType="number" android:layout_marginTop="8dp"/>
+</LinearLayout>
