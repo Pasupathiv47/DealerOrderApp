@@ -17,21 +17,7 @@ class OrderDetailActivity : AppCompatActivity() {
 
         val db = DBHelper(this)
         val orderId = intent.getLongExtra("order_id", -1)
-        val header = db.getOrderHeader(orderId)
-        val lines = db.getOrderLines(orderId)
-
-        val text = buildString {
-            appendLine("ORDER #$orderId")
-            appendLine("Dealer: ${header?.dealerName ?: ""}")
-            appendLine("Location: ${header?.location ?: ""}")
-            appendLine("Mobile: ${header?.mobile ?: ""}")
-            appendLine("Date: ${header?.date ?: ""}")
-            appendLine()
-            appendLine("Items:")
-            lines.forEachIndexed { i, line ->
-                appendLine("${i + 1}. ${line.itemName} - ${line.variant} - ${line.color} x ${line.qty}")
-            }
-        }
+        val text = OrderUtils.buildOrderText(db, orderId)
 
         findViewById<TextView>(R.id.orderDetailText).text = text
 
