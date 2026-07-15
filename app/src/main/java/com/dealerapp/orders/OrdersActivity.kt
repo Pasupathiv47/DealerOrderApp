@@ -28,10 +28,9 @@ class OrdersActivity : AppCompatActivity() {
     }
 
     private fun refresh() {
-        val orders = db.getOrders()
-        val rows = orders.map { RowData(it.id, "Order #${it.id} - ${it.dealerName}\n${it.date}") }.toMutableList()
-        listView.adapter = GenericAdapter(this, rows) { row ->
-            db.deleteOrder(row.id)
+        val orders = db.getOrders().toMutableList()
+        listView.adapter = OrderAdapter(this, db, orders) { order ->
+            db.deleteOrder(order.id)
             Toast.makeText(this, "Order deleted", Toast.LENGTH_SHORT).show()
             refresh()
         }
