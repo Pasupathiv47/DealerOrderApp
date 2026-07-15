@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <EditText android:id="@+id/dealerName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Dealer Name"/>
+    <EditText android:id="@+id/dealerLocation" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Location"/>
+    <EditText android:id="@+id/dealerMobile" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Mobile Number" android:inputType="phone"/>
+</LinearLayout>
