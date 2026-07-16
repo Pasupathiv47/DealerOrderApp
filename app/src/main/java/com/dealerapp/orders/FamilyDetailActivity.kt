@@ -18,22 +18,23 @@ class FamilyDetailActivity : AppCompatActivity() {
     private lateinit var variantList: ListView
     private lateinit var colorList: ListView
     private lateinit var variantSpinner: Spinner
+    private lateinit var titleText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_family_detail)
         db = DBHelper(this)
         familyId = intent.getLongExtra("family_id", -1)
-        val family = db.getFamily(familyId)
 
-        val brandLabel = if (family?.brand.isNullOrBlank()) "Unassigned" else family?.brand
-        findViewById<TextView>(R.id.familyTitle).text = "${family?.name ?: ""} (${family?.category ?: ""})\nBrand: $brandLabel"
-
+        titleText = findViewById(R.id.familyTitle)
         variantList = findViewById(R.id.variantListView)
         colorList = findViewById(R.id.colorListView)
         variantSpinner = findViewById(R.id.variantSpinner)
 
+        updateTitle()
         loadVariantOptions()
+
+        findViewById<Button>(R.id.btnChangeCategory).setOnClickListener { showChangeCategoryDialog() }
 
         findViewById<Button>(R.id.btnManageVariantOptions).setOnClickListener {
             startActivity(Intent(this, VariantOptionsActivity::class.java))
@@ -65,11 +66,46 @@ class FamilyDetailActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadVariantOptions()
+        updateTitle()
+    }
+
+    private fun updateTitle() {
+        val family = db.getFamily(familyId)
+        val brandLabel = if (family?.brand.isNullOrBlank()) "Unassigned" else family?.brand
+        val catLabel = if (family?.category.isNullOrBlank()) "No Category" else family?.category
+        titleText.text = "${family?.name ?: ""}\nCategory: $catLabel\nBrand: $brandLabel"
     }
 
     private fun loadVariantOptions() {
         val options = db.getVariantOptions().map { it.text }
         variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
+    }
+
+    private fun showChangeCategoryDialog() {
+        val categories = db.getCategories().map { it.text }
+        if (categories.isEmpty()) {
+            Toast.makeText(this, "Add a category first via Manage Categories", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val family = db.getFamily(familyId)
+        val spinner = Spinner(this)
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        val currentIndex = categories.indexOf(family?.category)
+        if (currentIndex >= 0) spinner.setSelection(currentIndex)
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        spinner.setPadding(padding, padding, padding, padding)
+
+        AlertDialog.Builder(this)
+            .setTitle("Change Category")
+            .setView(spinner)
+            .setPositiveButton("Save") { _, _ ->
+                val selected = spinner.selectedItem?.toString() ?: return@setPositiveButton
+                db.updateFamilyCategory(familyId, selected)
+                updateTitle()
+                Toast.makeText(this, "Category updated", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun refresh() {
