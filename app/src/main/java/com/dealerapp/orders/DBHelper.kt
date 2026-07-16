@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 4) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
@@ -18,6 +18,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER)")
         db.execSQL("CREATE TABLE brands (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        db.execSQL("CREATE TABLE variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -33,6 +34,9 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         if (oldVersion < 4) {
             db.execSQL("CREATE TABLE IF NOT EXISTS brands (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        }
+        if (oldVersion < 5) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         }
     }
 
@@ -84,7 +88,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
     }
 
-    // Variants
+    // Variants (per family)
     fun addVariant(familyId: Long, text: String): Long {
         val cv = ContentValues().apply { put("family_id", familyId); put("variant_text", text) }
         return writableDatabase.insert("family_variants", null, cv)
@@ -98,7 +102,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         return list
     }
 
-    // Colors
+    // Colors (per family)
     fun addColor(familyId: Long, text: String): Long {
         val cv = ContentValues().apply { put("family_id", familyId); put("color_text", text) }
         return writableDatabase.insert("family_colors", null, cv)
@@ -135,6 +139,20 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun getLocations(): List<RowData> {
         val list = mutableListOf<RowData>()
         val c = readableDatabase.rawQuery("SELECT id, name FROM locations ORDER BY name", null)
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
+        c.close()
+        return list
+    }
+
+    // Variant Options (master list)
+    fun addVariantOption(name: String): Long {
+        val cv = ContentValues().apply { put("name", name) }
+        return writableDatabase.insert("variant_options", null, cv)
+    }
+    fun deleteVariantOption(id: Long) { writableDatabase.delete("variant_options", "id=?", arrayOf(id.toString())) }
+    fun getVariantOptions(): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, name FROM variant_options ORDER BY name", null)
         while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
         c.close()
         return list
@@ -234,6 +252,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (b in getBrands()) brandsArr.put(b.text)
         root.put("brands", brandsArr)
 
+        val variantOptionsArr = JSONArray()
+        for (v in getVariantOptions()) variantOptionsArr.put(v.text)
+        root.put("variant_options", variantOptionsArr)
+
         return root
     }
 
@@ -311,6 +333,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (l in getLocations()) locationsArr.put(l.text)
         root.put("locations", locationsArr)
 
+        val variantOptionsArr = JSONArray()
+        for (v in getVariantOptions()) variantOptionsArr.put(v.text)
+        root.put("variant_options", variantOptionsArr)
+
         val ordersArr = JSONArray()
         for (o in getOrders()) {
             val header = getOrderHeader(o.id)
@@ -347,6 +373,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 db.execSQL("DELETE FROM order_items")
                 db.execSQL("DELETE FROM brands")
                 db.execSQL("DELETE FROM locations")
+                db.execSQL("DELETE FROM variant_options")
             }
 
             val dealersArr = root.optJSONArray("dealers") ?: JSONArray()
@@ -393,6 +420,12 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             for (i in 0 until locationsArr.length()) {
                 val cv = ContentValues().apply { put("name", locationsArr.getString(i)) }
                 db.insert("locations", null, cv)
+            }
+
+            val variantOptionsArr = root.optJSONArray("variant_options") ?: JSONArray()
+            for (i in 0 until variantOptionsArr.length()) {
+                val cv = ContentValues().apply { put("name", variantOptionsArr.getString(i)) }
+                db.insert("variant_options", null, cv)
             }
 
             val ordersArr = root.optJSONArray("orders") ?: JSONArray()
