@@ -1,13 +1,47 @@
 package com.dealerapp.orders
 
-data class Dealer(val id: Long, val name: String, val location: String, val mobile: String)
-data class ItemFamily(val id: Long, val name: String, val category: String, val brand: String = "")
-data class VariantDetail(val id: Long, val text: String, val mop: Double, val dp: Double)
-data class OrderLine(val itemName: String, val variant: String, val color: String, val qty: Int, val dpPrice: Double = 0.0)
-data class OrderSummary(val id: Long, val dealerName: String, val date: String, val location: String = "", val mobile: String = "")
-data class RowData(val id: Long, val text: String)
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.TextView
+import android.widget.Toast
 
-sealed class GroupRow
-data class HeaderRow(val title: String) : GroupRow()
-data class FamilyRow(val family: ItemFamily) : GroupRow()
-data class DealerRow(val dealer: Dealer) : GroupRow()
+class OrderAdapter(
+    context: Context,
+    private val db: DBHelper,
+    private val orders: MutableList<OrderSummary>,
+    private val onDelete: (OrderSummary) -> Unit
+) : ArrayAdapter<OrderSummary>(context, 0, orders) {
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.row_order, parent, false)
+        val order = orders[position]
+        val total = db.getOrderTotal(order.id)
+        view.findViewById<TextView>(R.id.orderRowText).text = "Order #${order.id} - ${order.dealerName}\n${order.date}\nTotal (DP): ₹${"%.2f".format(total)}"
+
+        view.findViewById<Button>(R.id.orderRowCopyBtn).setOnClickListener {
+            val text = OrderUtils.buildOrderText(db, order.id)
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("Order", text))
+            Toast.makeText(context, "Order #${order.id} copied", Toast.LENGTH_SHORT).show()
+        }
+
+        view.findViewById<Button>(R.id.orderRowEditBtn).setOnClickListener {
+            val intent = Intent(context, EditOrderActivity::class.java)
+            intent.putExtra("order_id", order.id)
+            context.startActivity(intent)
+        }
+
+        view.findViewById<Button>(R.id.orderRowDeleteBtn).setOnClickListener {
+            onDelete(order)
+        }
+
+        return view
+    }
+}
