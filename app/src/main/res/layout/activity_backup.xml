@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Backup &amp; Restore"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/backupInfoText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:layout_marginBottom="24dp"/>
+
+    <Button android:id="@+id/btnBackupNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup Data Now" android:layout_marginBottom="12dp"/>
+    <Button android:id="@+id/btnRestoreNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Restore From Backup File"/>
+</LinearLayout>
