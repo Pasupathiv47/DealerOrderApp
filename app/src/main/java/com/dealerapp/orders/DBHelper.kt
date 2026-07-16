@@ -214,6 +214,70 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
 
     // ---------- BACKUP & RESTORE ----------
 
+    fun exportItemsJson(): JSONObject {
+        val root = JSONObject()
+        val familiesArr = JSONArray()
+        for (f in getFamilies()) {
+            val fo = JSONObject()
+            fo.put("name", f.name); fo.put("category", f.category); fo.put("brand", f.brand)
+            val variantsArr = JSONArray()
+            for (v in getVariants(f.id)) variantsArr.put(v.text)
+            val colorsArr = JSONArray()
+            for (c in getColors(f.id)) colorsArr.put(c.text)
+            fo.put("variants", variantsArr)
+            fo.put("colors", colorsArr)
+            familiesArr.put(fo)
+        }
+        root.put("families", familiesArr)
+
+        val brandsArr = JSONArray()
+        for (b in getBrands()) brandsArr.put(b.text)
+        root.put("brands", brandsArr)
+
+        return root
+    }
+
+    fun exportDealersJson(): JSONObject {
+        val root = JSONObject()
+        val dealersArr = JSONArray()
+        for (d in getDealers()) {
+            val o = JSONObject()
+            o.put("name", d.name); o.put("location", d.location); o.put("mobile", d.mobile)
+            dealersArr.put(o)
+        }
+        root.put("dealers", dealersArr)
+
+        val locationsArr = JSONArray()
+        for (l in getLocations()) locationsArr.put(l.text)
+        root.put("locations", locationsArr)
+
+        return root
+    }
+
+    fun exportOrdersJson(): JSONObject {
+        val root = JSONObject()
+        val ordersArr = JSONArray()
+        for (o in getOrders()) {
+            val header = getOrderHeader(o.id)
+            val oo = JSONObject()
+            oo.put("dealer_name", header?.dealerName ?: "")
+            oo.put("dealer_location", header?.location ?: "")
+            oo.put("dealer_mobile", header?.mobile ?: "")
+            oo.put("order_date", header?.date ?: "")
+            val itemsArr = JSONArray()
+            for (line in getOrderLines(o.id)) {
+                val lo = JSONObject()
+                lo.put("item_name", line.itemName); lo.put("variant", line.variant)
+                lo.put("color", line.color); lo.put("qty", line.qty)
+                itemsArr.put(lo)
+            }
+            oo.put("items", itemsArr)
+            ordersArr.put(oo)
+        }
+        root.put("orders", ordersArr)
+        return root
+    }
+
     fun exportToJson(): JSONObject {
         val root = JSONObject()
 
