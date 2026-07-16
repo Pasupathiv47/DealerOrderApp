@@ -38,9 +38,9 @@ class BackupActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnRestoreNow).setOnClickListener { startRestorePick() }
     }
 
-    private fun startBackup(type: String) {
-        pendingBackupType = type
-        val prefix = when (type) {
+    private fun startBackup(backupType: String) {
+        pendingBackupType = backupType
+        val prefix = when (backupType) {
             "items" -> "dealer_orders_items_"
             "dealers" -> "dealer_orders_dealers_"
             "orders" -> "dealer_orders_history_"
