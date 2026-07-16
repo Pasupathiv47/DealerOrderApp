@@ -1,25 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Backup &amp; Restore"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
-
-    <TextView
-        android:id="@+id/backupInfoText"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="14sp"
-        android:layout_marginBottom="24dp"/>
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <Button android:id="@+id/btnBackupNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup Data Now" android:layout_marginBottom="12dp"/>
-    <Button android:id="@+id/btnRestoreNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Restore From Backup File"/>
-</LinearLayout>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Backup &amp; Restore"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:id="@+id/backupInfoText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:layout_marginBottom="20dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Backup Options" android:textStyle="bold" android:layout_marginBottom="8dp"/>
+
+        <Button android:id="@+id/btnBackupItems" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup Items Only" android:layout_marginBottom="10dp"/>
+        <Button android:id="@+id/btnBackupDealers" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup Dealers Only" android:layout_marginBottom="10dp"/>
+        <Button android:id="@+id/btnBackupOrders" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup Order History Only" android:layout_marginBottom="10dp"/>
+        <Button android:id="@+id/btnBackupAll" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup All Data" android:layout_marginBottom="24dp"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Restore" android:textStyle="bold" android:layout_marginBottom="8dp"/>
+        <Button android:id="@+id/btnRestoreNow" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Restore From Backup File"/>
+    </LinearLayout>
+</ScrollView>
