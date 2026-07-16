@@ -56,21 +56,44 @@ class EditOrderActivity : AppCompatActivity() {
             return
         }
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_order_line, null)
+        val brandSpinner = view.findViewById<Spinner>(R.id.lineBrandSpinner)
         val familySpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
         val variantSpinner = view.findViewById<Spinner>(R.id.lineVariantSpinner)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
 
-        familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, families.map { it.name })
+        val brandOptions = listOf("All Brands") + families.map { if (it.brand.isBlank()) "Unassigned" else it.brand }.distinct().sorted()
+        brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions)
+
+        var filteredFamilies: List<ItemFamily> = families
 
         fun updateVariantColor(pos: Int) {
-            val family = families[pos]
+            if (filteredFamilies.isEmpty()) return
+            val family = filteredFamilies[pos]
             val variants = db.getVariants(family.id).map { it.text }
             val colors = db.getColors(family.id).map { it.text }
             variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (variants.isEmpty()) listOf("-") else variants)
             colorSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (colors.isEmpty()) listOf("-") else colors)
         }
-        updateVariantColor(0)
+
+        fun updateFamilySpinner(brandLabel: String) {
+            filteredFamilies = if (brandLabel == "All Brands") {
+                families
+            } else {
+                families.filter { (if (it.brand.isBlank()) "Unassigned" else it.brand) == brandLabel }
+            }
+            familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filteredFamilies.map { it.name })
+            if (filteredFamilies.isNotEmpty()) updateVariantColor(0)
+        }
+        updateFamilySpinner("All Brands")
+
+        brandSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                updateFamilySpinner(brandOptions[position])
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
         familySpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
                 updateVariantColor(position)
@@ -82,6 +105,10 @@ class EditOrderActivity : AppCompatActivity() {
             .setTitle("Add Item to Order")
             .setView(view)
             .setPositiveButton("Add") { _, _ ->
+                if (filteredFamilies.isEmpty()) {
+                    Toast.makeText(this, "No items in this brand", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
                 val itemName = familySpinner.selectedItem?.toString() ?: return@setPositiveButton
                 val variant = variantSpinner.selectedItem?.toString() ?: "-"
                 val color = colorSpinner.selectedItem?.toString() ?: "-"
