@@ -45,8 +45,7 @@ class FamilyDetailActivity : AppCompatActivity() {
                 Toast.makeText(this, "Add a variant option first via Manage Variants", Toast.LENGTH_SHORT).show()
             } else {
                 val text = variantSpinner.selectedItem.toString()
-                db.addVariant(familyId, text)
-                refresh()
+                showPriceDialog(null, text)
             }
         }
 
@@ -108,13 +107,45 @@ class FamilyDetailActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun refresh() {
-        val variants = db.getVariants(familyId).toMutableList()
-        variantList.adapter = GenericAdapter(this, variants) { row ->
-            db.deleteVariant(row.id)
-            Toast.makeText(this, "Variant removed", Toast.LENGTH_SHORT).show()
-            refresh()
+    private fun showPriceDialog(existing: VariantDetail?, variantText: String) {
+        val view = layoutInflater.inflate(R.layout.dialog_variant_price, null)
+        val label = view.findViewById<TextView>(R.id.priceDialogLabel)
+        val mopEt = view.findViewById<EditText>(R.id.mopInput)
+        val dpEt = view.findViewById<EditText>(R.id.dpInput)
+        label.text = "Set price for $variantText"
+        if (existing != null) {
+            mopEt.setText(if (existing.mop == 0.0) "" else existing.mop.toString())
+            dpEt.setText(if (existing.dp == 0.0) "" else existing.dp.toString())
         }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "Add Variant" else "Edit Price")
+            .setView(view)
+            .setPositiveButton("Save") { _, _ ->
+                val mop = mopEt.text.toString().trim().toDoubleOrNull() ?: 0.0
+                val dp = dpEt.text.toString().trim().toDoubleOrNull() ?: 0.0
+                if (existing == null) {
+                    db.addVariant(familyId, variantText, mop, dp)
+                } else {
+                    db.updateVariantPrice(existing.id, mop, dp)
+                }
+                refresh()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun refresh() {
+        val variants = db.getVariantDetails(familyId).toMutableList()
+        variantList.adapter = VariantAdapter(
+            this, variants,
+            onEdit = { v -> showPriceDialog(v, v.text) },
+            onDelete = { v ->
+                db.deleteVariant(v.id)
+                Toast.makeText(this, "Variant removed", Toast.LENGTH_SHORT).show()
+                refresh()
+            }
+        )
 
         val colors = db.getColors(familyId).toMutableList()
         colorList.adapter = GenericAdapter(this, colors) { row ->
