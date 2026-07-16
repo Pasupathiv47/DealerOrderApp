@@ -15,9 +15,11 @@ import java.util.Date
 
 class NewOrderActivity : AppCompatActivity() {
     private lateinit var db: DBHelper
+    private lateinit var locationSpinner: Spinner
     private lateinit var dealerSpinner: Spinner
     private lateinit var lineListView: ListView
-    private var dealers: List<Dealer> = emptyList()
+    private var allDealers: List<Dealer> = emptyList()
+    private var filteredDealers: List<Dealer> = emptyList()
     private var families: List<ItemFamily> = emptyList()
     private val orderLines = mutableListOf<OrderLine>()
 
@@ -26,16 +28,35 @@ class NewOrderActivity : AppCompatActivity() {
         setContentView(R.layout.activity_new_order)
         db = DBHelper(this)
 
+        locationSpinner = findViewById(R.id.locationSpinner)
         dealerSpinner = findViewById(R.id.dealerSpinner)
         lineListView = findViewById(R.id.lineListView)
 
-        dealers = db.getDealers()
+        allDealers = db.getDealers()
         families = db.getFamilies()
 
-        if (dealers.isEmpty()) Toast.makeText(this, "Add a dealer first", Toast.LENGTH_LONG).show()
+        if (allDealers.isEmpty()) Toast.makeText(this, "Add a dealer first", Toast.LENGTH_LONG).show()
         if (families.isEmpty()) Toast.makeText(this, "Add items first", Toast.LENGTH_LONG).show()
 
-        dealerSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, dealers.map { it.name })
+        val locationOptions = listOf("All Locations") + allDealers.map { if (it.location.isBlank()) "Unassigned" else it.location }.distinct().sorted()
+        locationSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, locationOptions)
+
+        fun updateDealerSpinner(locationLabel: String) {
+            filteredDealers = if (locationLabel == "All Locations") {
+                allDealers
+            } else {
+                allDealers.filter { (if (it.location.isBlank()) "Unassigned" else it.location) == locationLabel }
+            }
+            dealerSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filteredDealers.map { it.name })
+        }
+        updateDealerSpinner("All Locations")
+
+        locationSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                updateDealerSpinner(locationOptions[position])
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
 
         findViewById<Button>(R.id.btnAddLine).setOnClickListener { showAddLineDialog() }
         findViewById<Button>(R.id.btnSaveOrder).setOnClickListener { saveOrder() }
@@ -59,21 +80,44 @@ class NewOrderActivity : AppCompatActivity() {
             return
         }
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_order_line, null)
+        val brandSpinner = view.findViewById<Spinner>(R.id.lineBrandSpinner)
         val familySpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
         val variantSpinner = view.findViewById<Spinner>(R.id.lineVariantSpinner)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
 
-        familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, families.map { it.name })
+        val brandOptions = listOf("All Brands") + families.map { if (it.brand.isBlank()) "Unassigned" else it.brand }.distinct().sorted()
+        brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions)
+
+        var filteredFamilies: List<ItemFamily> = families
 
         fun updateVariantColor(pos: Int) {
-            val family = families[pos]
+            if (filteredFamilies.isEmpty()) return
+            val family = filteredFamilies[pos]
             val variants = db.getVariants(family.id).map { it.text }
             val colors = db.getColors(family.id).map { it.text }
             variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (variants.isEmpty()) listOf("-") else variants)
             colorSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (colors.isEmpty()) listOf("-") else colors)
         }
-        updateVariantColor(0)
+
+        fun updateFamilySpinner(brandLabel: String) {
+            filteredFamilies = if (brandLabel == "All Brands") {
+                families
+            } else {
+                families.filter { (if (it.brand.isBlank()) "Unassigned" else it.brand) == brandLabel }
+            }
+            familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filteredFamilies.map { it.name })
+            if (filteredFamilies.isNotEmpty()) updateVariantColor(0)
+        }
+        updateFamilySpinner("All Brands")
+
+        brandSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                updateFamilySpinner(brandOptions[position])
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
         familySpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
                 updateVariantColor(position)
@@ -85,6 +129,10 @@ class NewOrderActivity : AppCompatActivity() {
             .setTitle("Add Item to Order")
             .setView(view)
             .setPositiveButton("Add") { _, _ ->
+                if (filteredFamilies.isEmpty()) {
+                    Toast.makeText(this, "No items in this brand", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
                 val itemName = familySpinner.selectedItem?.toString() ?: return@setPositiveButton
                 val variant = variantSpinner.selectedItem?.toString() ?: "-"
                 val color = colorSpinner.selectedItem?.toString() ?: "-"
@@ -97,15 +145,15 @@ class NewOrderActivity : AppCompatActivity() {
     }
 
     private fun saveOrder() {
-        if (dealers.isEmpty()) {
-            Toast.makeText(this, "Add a dealer first", Toast.LENGTH_SHORT).show()
+        if (filteredDealers.isEmpty()) {
+            Toast.makeText(this, "No dealer selected", Toast.LENGTH_SHORT).show()
             return
         }
         if (orderLines.isEmpty()) {
             Toast.makeText(this, "Add at least one item", Toast.LENGTH_SHORT).show()
             return
         }
-        val dealer = dealers[dealerSpinner.selectedItemPosition]
+        val dealer = filteredDealers[dealerSpinner.selectedItemPosition]
         val date = DateFormat.format("dd-MMM-yyyy hh:mm a", Date()).toString()
         db.createOrder(dealer.name, dealer.location, dealer.mobile, date, orderLines)
         Toast.makeText(this, "Order saved", Toast.LENGTH_SHORT).show()
