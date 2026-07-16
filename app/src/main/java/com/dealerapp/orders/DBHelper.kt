@@ -7,15 +7,15 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 6) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 7) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
         db.execSQL("CREATE TABLE item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, brand TEXT DEFAULT '')")
-        db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
+        db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT, mop_price REAL DEFAULT 0, dp_price REAL DEFAULT 0)")
         db.execSQL("CREATE TABLE family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
         db.execSQL("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, dealer_name TEXT, dealer_location TEXT, dealer_mobile TEXT, order_date TEXT)")
-        db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER)")
+        db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER, dp_price REAL DEFAULT 0)")
         db.execSQL("CREATE TABLE brands (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
@@ -69,6 +69,11 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 }
                 existingCats.close()
             }
+        }
+        if (oldVersion < 7) {
+            try { db.execSQL("ALTER TABLE family_variants ADD COLUMN mop_price REAL DEFAULT 0") } catch (e: Exception) { }
+            try { db.execSQL("ALTER TABLE family_variants ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
+            try { db.execSQL("ALTER TABLE order_items ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
         }
     }
 
@@ -124,16 +129,23 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
     }
 
-    // Variants (per family)
-    fun addVariant(familyId: Long, text: String): Long {
-        val cv = ContentValues().apply { put("family_id", familyId); put("variant_text", text) }
+    // Variants (per family, with pricing)
+    fun addVariant(familyId: Long, text: String, mop: Double, dp: Double): Long {
+        val cv = ContentValues().apply {
+            put("family_id", familyId); put("variant_text", text)
+            put("mop_price", mop); put("dp_price", dp)
+        }
         return writableDatabase.insert("family_variants", null, cv)
     }
+    fun updateVariantPrice(id: Long, mop: Double, dp: Double) {
+        val cv = ContentValues().apply { put("mop_price", mop); put("dp_price", dp) }
+        writableDatabase.update("family_variants", cv, "id=?", arrayOf(id.toString()))
+    }
     fun deleteVariant(id: Long) { writableDatabase.delete("family_variants", "id=?", arrayOf(id.toString())) }
-    fun getVariants(familyId: Long): List<RowData> {
-        val list = mutableListOf<RowData>()
-        val c = readableDatabase.rawQuery("SELECT id, variant_text FROM family_variants WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
-        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
+    fun getVariantDetails(familyId: Long): List<VariantDetail> {
+        val list = mutableListOf<VariantDetail>()
+        val c = readableDatabase.rawQuery("SELECT id, variant_text, mop_price, dp_price FROM family_variants WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
+        while (c.moveToNext()) list.add(VariantDetail(c.getLong(0), c.getString(1), c.getDouble(2), c.getDouble(3)))
         c.close()
         return list
     }
@@ -180,7 +192,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         return list
     }
 
-    // Variant Options (master list)
+    // Variant Options (master list of RAM/Storage labels)
     fun addVariantOption(name: String): Long {
         val cv = ContentValues().apply { put("name", name) }
         return writableDatabase.insert("variant_options", null, cv)
@@ -222,6 +234,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 val lcv = ContentValues().apply {
                     put("order_id", orderId); put("item_name", line.itemName)
                     put("variant", line.variant); put("color", line.color); put("qty", line.qty)
+                    put("dp_price", line.dpPrice)
                 }
                 db.insert("order_items", null, lcv)
             }
@@ -241,6 +254,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 val cv = ContentValues().apply {
                     put("order_id", orderId); put("item_name", line.itemName)
                     put("variant", line.variant); put("color", line.color); put("qty", line.qty)
+                    put("dp_price", line.dpPrice)
                 }
                 db.insert("order_items", null, cv)
             }
@@ -266,10 +280,16 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
 
     fun getOrderLines(orderId: Long): List<OrderLine> {
         val list = mutableListOf<OrderLine>()
-        val c = readableDatabase.rawQuery("SELECT item_name, variant, color, qty FROM order_items WHERE order_id=?", arrayOf(orderId.toString()))
-        while (c.moveToNext()) list.add(OrderLine(c.getString(0), c.getString(1), c.getString(2), c.getInt(3)))
+        val c = readableDatabase.rawQuery("SELECT item_name, variant, color, qty, dp_price FROM order_items WHERE order_id=?", arrayOf(orderId.toString()))
+        while (c.moveToNext()) list.add(OrderLine(c.getString(0), c.getString(1), c.getString(2), c.getInt(3), c.getDouble(4)))
         c.close()
         return list
+    }
+
+    fun getOrderTotal(orderId: Long): Double {
+        var total = 0.0
+        for (line in getOrderLines(orderId)) total += line.dpPrice * line.qty
+        return total
     }
 
     fun getOrderHeader(orderId: Long): OrderSummary? {
@@ -289,7 +309,11 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             val fo = JSONObject()
             fo.put("name", f.name); fo.put("category", f.category); fo.put("brand", f.brand)
             val variantsArr = JSONArray()
-            for (v in getVariants(f.id)) variantsArr.put(v.text)
+            for (v in getVariantDetails(f.id)) {
+                val vo = JSONObject()
+                vo.put("text", v.text); vo.put("mop", v.mop); vo.put("dp", v.dp)
+                variantsArr.put(vo)
+            }
             val colorsArr = JSONArray()
             for (c in getColors(f.id)) colorsArr.put(c.text)
             fo.put("variants", variantsArr)
@@ -345,9 +369,11 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 val lo = JSONObject()
                 lo.put("item_name", line.itemName); lo.put("variant", line.variant)
                 lo.put("color", line.color); lo.put("qty", line.qty)
+                lo.put("dp_price", line.dpPrice)
                 itemsArr.put(lo)
             }
             oo.put("items", itemsArr)
+            oo.put("total_dp", getOrderTotal(o.id))
             ordersArr.put(oo)
         }
         root.put("orders", ordersArr)
@@ -370,7 +396,11 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             val fo = JSONObject()
             fo.put("name", f.name); fo.put("category", f.category); fo.put("brand", f.brand)
             val variantsArr = JSONArray()
-            for (v in getVariants(f.id)) variantsArr.put(v.text)
+            for (v in getVariantDetails(f.id)) {
+                val vo = JSONObject()
+                vo.put("text", v.text); vo.put("mop", v.mop); vo.put("dp", v.dp)
+                variantsArr.put(vo)
+            }
             val colorsArr = JSONArray()
             for (c in getColors(f.id)) colorsArr.put(c.text)
             fo.put("variants", variantsArr)
@@ -401,130 +431,4 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             val oo = JSONObject()
             oo.put("dealer_name", header?.dealerName ?: "")
             oo.put("dealer_location", header?.location ?: "")
-            oo.put("dealer_mobile", header?.mobile ?: "")
-            oo.put("order_date", header?.date ?: "")
-            val itemsArr = JSONArray()
-            for (line in getOrderLines(o.id)) {
-                val lo = JSONObject()
-                lo.put("item_name", line.itemName); lo.put("variant", line.variant)
-                lo.put("color", line.color); lo.put("qty", line.qty)
-                itemsArr.put(lo)
-            }
-            oo.put("items", itemsArr)
-            ordersArr.put(oo)
-        }
-        root.put("orders", ordersArr)
-
-        return root
-    }
-
-    fun importFromJson(root: JSONObject, clearFirst: Boolean) {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            if (clearFirst) {
-                db.execSQL("DELETE FROM dealers")
-                db.execSQL("DELETE FROM item_families")
-                db.execSQL("DELETE FROM family_variants")
-                db.execSQL("DELETE FROM family_colors")
-                db.execSQL("DELETE FROM orders")
-                db.execSQL("DELETE FROM order_items")
-                db.execSQL("DELETE FROM brands")
-                db.execSQL("DELETE FROM locations")
-                db.execSQL("DELETE FROM variant_options")
-                db.execSQL("DELETE FROM categories")
-            }
-
-            val dealersArr = root.optJSONArray("dealers") ?: JSONArray()
-            for (i in 0 until dealersArr.length()) {
-                val o = dealersArr.getJSONObject(i)
-                val cv = ContentValues().apply {
-                    put("name", o.optString("name")); put("location", o.optString("location")); put("mobile", o.optString("mobile"))
-                }
-                db.insert("dealers", null, cv)
-            }
-
-            val familiesArr = root.optJSONArray("families") ?: JSONArray()
-            for (i in 0 until familiesArr.length()) {
-                val fo = familiesArr.getJSONObject(i)
-                val fcv = ContentValues().apply {
-                    put("name", fo.optString("name")); put("category", fo.optString("category")); put("brand", fo.optString("brand", ""))
-                }
-                val familyId = db.insert("item_families", null, fcv)
-
-                val variantsArr = fo.optJSONArray("variants") ?: JSONArray()
-                for (j in 0 until variantsArr.length()) {
-                    val vcv = ContentValues().apply {
-                        put("family_id", familyId); put("variant_text", variantsArr.getString(j))
-                    }
-                    db.insert("family_variants", null, vcv)
-                }
-
-                val colorsArr = fo.optJSONArray("colors") ?: JSONArray()
-                for (j in 0 until colorsArr.length()) {
-                    val ccv = ContentValues().apply {
-                        put("family_id", familyId); put("color_text", colorsArr.getString(j))
-                    }
-                    db.insert("family_colors", null, ccv)
-                }
-            }
-
-            val brandsArr = root.optJSONArray("brands") ?: JSONArray()
-            for (i in 0 until brandsArr.length()) {
-                val cv = ContentValues().apply { put("name", brandsArr.getString(i)) }
-                db.insert("brands", null, cv)
-            }
-
-            val locationsArr = root.optJSONArray("locations") ?: JSONArray()
-            for (i in 0 until locationsArr.length()) {
-                val cv = ContentValues().apply { put("name", locationsArr.getString(i)) }
-                db.insert("locations", null, cv)
-            }
-
-            val variantOptionsArr = root.optJSONArray("variant_options") ?: JSONArray()
-            for (i in 0 until variantOptionsArr.length()) {
-                val cv = ContentValues().apply { put("name", variantOptionsArr.getString(i)) }
-                db.insert("variant_options", null, cv)
-            }
-
-            val categoriesArr = root.optJSONArray("categories") ?: JSONArray()
-            for (i in 0 until categoriesArr.length()) {
-                val name = categoriesArr.getString(i)
-                val exists = db.rawQuery("SELECT id FROM categories WHERE name=?", arrayOf(name))
-                val already = exists.moveToFirst()
-                exists.close()
-                if (!already) {
-                    val cv = ContentValues().apply { put("name", name) }
-                    db.insert("categories", null, cv)
-                }
-            }
-
-            val ordersArr = root.optJSONArray("orders") ?: JSONArray()
-            for (i in 0 until ordersArr.length()) {
-                val oo = ordersArr.getJSONObject(i)
-                val ocv = ContentValues().apply {
-                    put("dealer_name", oo.optString("dealer_name"))
-                    put("dealer_location", oo.optString("dealer_location"))
-                    put("dealer_mobile", oo.optString("dealer_mobile"))
-                    put("order_date", oo.optString("order_date"))
-                }
-                val orderId = db.insert("orders", null, ocv)
-
-                val itemsArr = oo.optJSONArray("items") ?: JSONArray()
-                for (j in 0 until itemsArr.length()) {
-                    val lo = itemsArr.getJSONObject(j)
-                    val lcv = ContentValues().apply {
-                        put("order_id", orderId); put("item_name", lo.optString("item_name"))
-                        put("variant", lo.optString("variant")); put("color", lo.optString("color"))
-                        put("qty", lo.optInt("qty", 1))
-                    }
-                    db.insert("order_items", null, lcv)
-                }
-            }
-
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-    }
-}
+            oo.put("dealer_mobile", header?.mobile ?: ""
