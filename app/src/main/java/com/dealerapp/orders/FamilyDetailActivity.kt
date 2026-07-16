@@ -1,9 +1,13 @@
 package com.dealerapp.orders
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -13,6 +17,7 @@ class FamilyDetailActivity : AppCompatActivity() {
     private var familyId: Long = -1
     private lateinit var variantList: ListView
     private lateinit var colorList: ListView
+    private lateinit var variantSpinner: Spinner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,13 +31,20 @@ class FamilyDetailActivity : AppCompatActivity() {
 
         variantList = findViewById(R.id.variantListView)
         colorList = findViewById(R.id.colorListView)
+        variantSpinner = findViewById(R.id.variantSpinner)
+
+        loadVariantOptions()
+
+        findViewById<Button>(R.id.btnManageVariantOptions).setOnClickListener {
+            startActivity(Intent(this, VariantOptionsActivity::class.java))
+        }
 
         findViewById<Button>(R.id.btnAddVariant).setOnClickListener {
-            val et = findViewById<EditText>(R.id.variantInput)
-            val text = et.text.toString().trim()
-            if (text.isNotEmpty()) {
+            if (variantSpinner.adapter == null || variantSpinner.adapter.count == 0) {
+                Toast.makeText(this, "Add a variant option first via Manage Variants", Toast.LENGTH_SHORT).show()
+            } else {
+                val text = variantSpinner.selectedItem.toString()
                 db.addVariant(familyId, text)
-                et.setText("")
                 refresh()
             }
         }
@@ -48,6 +60,16 @@ class FamilyDetailActivity : AppCompatActivity() {
         }
 
         refresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadVariantOptions()
+    }
+
+    private fun loadVariantOptions() {
+        val options = db.getVariantOptions().map { it.text }
+        variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
     }
 
     private fun refresh() {
