@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView android:id="@+id/priceDialogLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textStyle="bold" android:layout_marginBottom="10dp"/>
+    <EditText android:id="@+id/mopInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="MOP Price (₹)" android:inputType="numberDecimal"/>
+    <EditText android:id="@+id/dpInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="DP Price (₹)" android:inputType="numberDecimal" android:layout_marginTop="8dp"/>
+</LinearLayout>
