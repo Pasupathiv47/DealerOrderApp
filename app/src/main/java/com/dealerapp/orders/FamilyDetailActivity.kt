@@ -21,7 +21,7 @@ class FamilyDetailActivity : AppCompatActivity() {
         familyId = intent.getLongExtra("family_id", -1)
         val family = db.getFamily(familyId)
 
-        findViewById<TextView>(R.id.familyTitle).text = "${family?.name ?: ""} (${family?.category ?: ""})"
+        findViewById<TextView>(R.id.familyTitle).text = "${family?.name ?: ""} (${family?.category ?: ""})\nBrand: ${if (family?.brand.isNullOrBlank()) "Unassigned" else family?.brand}" = "${family?.name ?: ""} (${family?.category ?: ""})"
 
         variantList = findViewById(R.id.variantListView)
         colorList = findViewById(R.id.colorListView)
