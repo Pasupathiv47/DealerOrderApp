@@ -17,5 +17,6 @@
     <Button android:id="@+id/btnDealers" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Manage Dealers" android:layout_marginBottom="12dp"/>
     <Button android:id="@+id/btnItems" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Manage Items" android:layout_marginBottom="12dp"/>
     <Button android:id="@+id/btnNewOrder" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="New Order" android:layout_marginBottom="12dp"/>
-    <Button android:id="@+id/btnOrders" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Order History"/>
+    <Button android:id="@+id/btnOrders" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Order History" android:layout_marginBottom="12dp"/>
+    <Button android:id="@+id/btnBackup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Backup / Restore Data"/>
 </LinearLayout>
