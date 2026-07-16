@@ -34,7 +34,8 @@ class FamilyGroupedAdapter(
             is FamilyRow -> {
                 val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.row_family, parent, false)
                 val family = row.family
-                view.findViewById<TextView>(R.id.familyRowText).text = "${family.name} (${family.category})"
+                val catLabel = if (family.category.isBlank()) "No Category" else family.category
+                view.findViewById<TextView>(R.id.familyRowText).text = "${family.name} ($catLabel)"
                 view.findViewById<Button>(R.id.familyMoveBtn).setOnClickListener { onMove(family) }
                 view.findViewById<Button>(R.id.familyDeleteBtn).setOnClickListener { onDelete(family) }
                 view.setOnClickListener { onOpen(family) }
