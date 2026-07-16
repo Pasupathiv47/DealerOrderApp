@@ -431,4 +431,4 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             val oo = JSONObject()
             oo.put("dealer_name", header?.dealerName ?: "")
             oo.put("dealer_location", header?.location ?: "")
-            oo.put("dealer_mobile", header?.mobile ?: ""
+            oo.put("dealer_mobile", header?.mobile ?: "")
