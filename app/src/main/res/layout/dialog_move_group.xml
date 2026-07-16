@@ -6,5 +6,5 @@
     android:padding="20dp">
 
     <TextView android:id="@+id/moveLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textStyle="bold" android:layout_marginBottom="10dp"/>
-    <AutoCompleteTextView android:id="@+id/moveInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Type or select group name"/>
+    <Spinner android:id="@+id/moveInput" android:layout_width="match_parent" android:layout_height="wrap_content"/>
 </LinearLayout>
