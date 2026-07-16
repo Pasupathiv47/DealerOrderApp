@@ -18,7 +18,7 @@ class NewOrderActivity : AppCompatActivity() {
     private lateinit var dealerSpinner: Spinner
     private lateinit var lineListView: ListView
     private var dealers: List<Dealer> = emptyList()
-    private var items: List<Item> = emptyList()
+    private var families: List<ItemFamily> = emptyList()
     private val orderLines = mutableListOf<OrderLine>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,10 +30,10 @@ class NewOrderActivity : AppCompatActivity() {
         lineListView = findViewById(R.id.lineListView)
 
         dealers = db.getDealers()
-        items = db.getItems()
+        families = db.getFamilies()
 
         if (dealers.isEmpty()) Toast.makeText(this, "Add a dealer first", Toast.LENGTH_LONG).show()
-        if (items.isEmpty()) Toast.makeText(this, "Add items first", Toast.LENGTH_LONG).show()
+        if (families.isEmpty()) Toast.makeText(this, "Add items first", Toast.LENGTH_LONG).show()
 
         dealerSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, dealers.map { it.name })
 
@@ -54,27 +54,27 @@ class NewOrderActivity : AppCompatActivity() {
     }
 
     private fun showAddLineDialog() {
-        if (items.isEmpty()) {
+        if (families.isEmpty()) {
             Toast.makeText(this, "No items available", Toast.LENGTH_SHORT).show()
             return
         }
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_order_line, null)
-        val itemSpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
+        val familySpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
         val variantSpinner = view.findViewById<Spinner>(R.id.lineVariantSpinner)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
 
-        itemSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items.map { it.name })
+        familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, families.map { it.name })
 
         fun updateVariantColor(pos: Int) {
-            val item = items[pos]
-            val variants = item.variants.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            val colors = item.colors.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val family = families[pos]
+            val variants = db.getVariants(family.id).map { it.text }
+            val colors = db.getColors(family.id).map { it.text }
             variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (variants.isEmpty()) listOf("-") else variants)
             colorSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (colors.isEmpty()) listOf("-") else colors)
         }
         updateVariantColor(0)
-        itemSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+        familySpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
                 updateVariantColor(position)
             }
@@ -85,7 +85,7 @@ class NewOrderActivity : AppCompatActivity() {
             .setTitle("Add Item to Order")
             .setView(view)
             .setPositiveButton("Add") { _, _ ->
-                val itemName = itemSpinner.selectedItem?.toString() ?: return@setPositiveButton
+                val itemName = familySpinner.selectedItem?.toString() ?: return@setPositiveButton
                 val variant = variantSpinner.selectedItem?.toString() ?: "-"
                 val color = colorSpinner.selectedItem?.toString() ?: "-"
                 val qty = qtyEt.text.toString().trim().toIntOrNull() ?: 1
