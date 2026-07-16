@@ -10,13 +10,15 @@ import androidx.appcompat.app.AppCompatActivity
 class ItemsActivity : AppCompatActivity() {
     private lateinit var db: DBHelper
     private lateinit var listView: ListView
-    private val categories = listOf("Smartphones", "Tabs", "Accessories", "TV", "Home Appliances")
+    private lateinit var categoryFilterSpinner: Spinner
+    private var allFamilies: List<ItemFamily> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_list)
+        setContentView(R.layout.activity_items)
         db = DBHelper(this)
         listView = findViewById(R.id.listView)
+        categoryFilterSpinner = findViewById(R.id.categoryFilterSpinner)
 
         findViewById<Button>(R.id.btnTopAction).apply {
             text = "Add Item Family"
@@ -24,8 +26,18 @@ class ItemsActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnSecondAction).apply {
             text = "Manage Brands"
-            visibility = android.view.View.VISIBLE
             setOnClickListener { startActivity(Intent(this@ItemsActivity, BrandsActivity::class.java)) }
+        }
+        findViewById<Button>(R.id.btnThirdAction).apply {
+            text = "Manage Categories"
+            setOnClickListener { startActivity(Intent(this@ItemsActivity, CategoriesActivity::class.java)) }
+        }
+
+        categoryFilterSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                applyFilter()
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
     }
 
@@ -35,7 +47,19 @@ class ItemsActivity : AppCompatActivity() {
     }
 
     private fun refresh() {
-        val families = db.getFamilies()
+        allFamilies = db.getFamilies()
+        val categoryOptions = listOf("All Categories") + db.getCategories().map { it.text }
+        val previousSelection = categoryFilterSpinner.selectedItem?.toString()
+        categoryFilterSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categoryOptions)
+        val idx = categoryOptions.indexOf(previousSelection)
+        if (idx >= 0) categoryFilterSpinner.setSelection(idx)
+        applyFilter()
+    }
+
+    private fun applyFilter() {
+        val selectedCategory = categoryFilterSpinner.selectedItem?.toString() ?: "All Categories"
+        val families = if (selectedCategory == "All Categories") allFamilies else allFamilies.filter { it.category == selectedCategory }
+
         val rows = mutableListOf<GroupRow>()
         var lastBrand: String? = null
         for (f in families) {
@@ -63,13 +87,15 @@ class ItemsActivity : AppCompatActivity() {
     }
 
     private fun brandOptions(): List<String> = listOf("Unassigned") + db.getBrands().map { it.text }
+    private fun categoryOptions(): List<String> = db.getCategories().map { it.text }
 
     private fun showAddDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_item, null)
         val nameEt = view.findViewById<EditText>(R.id.itemName)
         val catSpinner = view.findViewById<Spinner>(R.id.itemCategory)
         val brandSpinner = view.findViewById<Spinner>(R.id.itemBrand)
-        catSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        val cats = categoryOptions()
+        catSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (cats.isEmpty()) listOf("Add a category first") else cats)
         brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions())
 
         AlertDialog.Builder(this)
@@ -77,11 +103,13 @@ class ItemsActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton("Save") { _, _ ->
                 val name = nameEt.text.toString().trim()
-                val category = catSpinner.selectedItem?.toString() ?: categories[0]
+                val category = if (cats.isEmpty()) "" else catSpinner.selectedItem?.toString() ?: ""
                 val brandSelected = brandSpinner.selectedItem?.toString() ?: "Unassigned"
                 val brand = if (brandSelected == "Unassigned") "" else brandSelected
                 if (name.isEmpty()) {
                     Toast.makeText(this, "Name required", Toast.LENGTH_SHORT).show()
+                } else if (cats.isEmpty()) {
+                    Toast.makeText(this, "Add a category first via Manage Categories", Toast.LENGTH_SHORT).show()
                 } else {
                     val id = db.addFamily(name, category, brand)
                     val intent = Intent(this, FamilyDetailActivity::class.java)
