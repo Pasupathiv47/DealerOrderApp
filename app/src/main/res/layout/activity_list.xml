@@ -5,6 +5,15 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <Button android:id="@+id/btnTopAction" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Add" android:layout_marginBottom="12dp"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <Button android:id="@+id/btnTopAction" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Add" android:layout_marginEnd="6dp"/>
+        <Button android:id="@+id/btnSecondAction" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Manage" android:visibility="gone"/>
+    </LinearLayout>
+
     <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent"/>
 </LinearLayout>
