@@ -5,7 +5,12 @@
     android:orientation="vertical"
     android:padding="20dp">
 
-    <Spinner android:id="@+id/lineItemSpinner" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Brand" android:textStyle="bold"/>
+    <Spinner android:id="@+id/lineBrandSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp"/>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Item" android:textStyle="bold"/>
+    <Spinner android:id="@+id/lineItemSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp"/>
+
     <Spinner android:id="@+id/lineVariantSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
     <Spinner android:id="@+id/lineColorSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
     <EditText android:id="@+id/lineQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Quantity" android:inputType="number" android:layout_marginTop="8dp"/>
