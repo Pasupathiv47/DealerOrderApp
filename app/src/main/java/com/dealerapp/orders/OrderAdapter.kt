@@ -3,6 +3,7 @@ package com.dealerapp.orders
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +29,12 @@ class OrderAdapter(
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("Order", text))
             Toast.makeText(context, "Order #${order.id} copied", Toast.LENGTH_SHORT).show()
+        }
+
+        view.findViewById<Button>(R.id.orderRowEditBtn).setOnClickListener {
+            val intent = Intent(context, EditOrderActivity::class.java)
+            intent.putExtra("order_id", order.id)
+            context.startActivity(intent)
         }
 
         view.findViewById<Button>(R.id.orderRowDeleteBtn).setOnClickListener {
