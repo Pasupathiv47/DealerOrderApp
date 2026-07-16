@@ -7,9 +7,17 @@
 
     <TextView android:id="@+id/familyTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="18sp" android:textStyle="bold" android:layout_marginBottom="12dp"/>
 
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RAM + Storage Variants" android:textStyle="bold"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="RAM + Storage Variants" android:textStyle="bold"/>
+        <Button android:id="@+id/btnManageVariantOptions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Manage Variants"/>
+    </LinearLayout>
+
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-        <EditText android:id="@+id/variantInput" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="e.g. 8GB+128GB"/>
+        <Spinner android:id="@+id/variantSpinner" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
         <Button android:id="@+id/btnAddVariant" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Add"/>
     </LinearLayout>
     <ListView android:id="@+id/variantListView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
