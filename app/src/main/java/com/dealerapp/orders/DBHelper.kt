@@ -7,11 +7,11 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 2) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
-        db.execSQL("CREATE TABLE item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT)")
+        db.execSQL("CREATE TABLE item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, brand TEXT DEFAULT '')")
         db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
         db.execSQL("CREATE TABLE family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
         db.execSQL("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, dealer_name TEXT, dealer_location TEXT, dealer_mobile TEXT, order_date TEXT)")
@@ -25,6 +25,9 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             db.execSQL("CREATE TABLE IF NOT EXISTS family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
         }
+        if (oldVersion < 3) {
+            try { db.execSQL("ALTER TABLE item_families ADD COLUMN brand TEXT DEFAULT ''") } catch (e: Exception) { }
+        }
     }
 
     // Dealers
@@ -35,15 +38,26 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun deleteDealer(id: Long) { writableDatabase.delete("dealers", "id=?", arrayOf(id.toString())) }
     fun getDealers(): List<Dealer> {
         val list = mutableListOf<Dealer>()
-        val c = readableDatabase.rawQuery("SELECT id, name, location, mobile FROM dealers ORDER BY name", null)
+        val c = readableDatabase.rawQuery("SELECT id, name, location, mobile FROM dealers ORDER BY location, name", null)
         while (c.moveToNext()) list.add(Dealer(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
+        c.close()
+        return list
+    }
+    fun updateDealerLocation(id: Long, location: String) {
+        val cv = ContentValues().apply { put("location", location) }
+        writableDatabase.update("dealers", cv, "id=?", arrayOf(id.toString()))
+    }
+    fun getDistinctLocations(): List<String> {
+        val list = mutableListOf<String>()
+        val c = readableDatabase.rawQuery("SELECT DISTINCT location FROM dealers WHERE location IS NOT NULL AND location != '' ORDER BY location", null)
+        while (c.moveToNext()) list.add(c.getString(0))
         c.close()
         return list
     }
 
     // Families
-    fun addFamily(name: String, category: String): Long {
-        val cv = ContentValues().apply { put("name", name); put("category", category) }
+    fun addFamily(name: String, category: String, brand: String): Long {
+        val cv = ContentValues().apply { put("name", name); put("category", category); put("brand", brand) }
         return writableDatabase.insert("item_families", null, cv)
     }
     fun deleteFamily(id: Long) {
@@ -54,17 +68,28 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     }
     fun getFamilies(): List<ItemFamily> {
         val list = mutableListOf<ItemFamily>()
-        val c = readableDatabase.rawQuery("SELECT id, name, category FROM item_families ORDER BY name", null)
-        while (c.moveToNext()) list.add(ItemFamily(c.getLong(0), c.getString(1), c.getString(2)))
+        val c = readableDatabase.rawQuery("SELECT id, name, category, brand FROM item_families ORDER BY brand, name", null)
+        while (c.moveToNext()) list.add(ItemFamily(c.getLong(0), c.getString(1), c.getString(2), c.getString(3) ?: ""))
         c.close()
         return list
     }
     fun getFamily(id: Long): ItemFamily? {
-        val c = readableDatabase.rawQuery("SELECT id, name, category FROM item_families WHERE id=?", arrayOf(id.toString()))
+        val c = readableDatabase.rawQuery("SELECT id, name, category, brand FROM item_families WHERE id=?", arrayOf(id.toString()))
         var result: ItemFamily? = null
-        if (c.moveToFirst()) result = ItemFamily(c.getLong(0), c.getString(1), c.getString(2))
+        if (c.moveToFirst()) result = ItemFamily(c.getLong(0), c.getString(1), c.getString(2), c.getString(3) ?: "")
         c.close()
         return result
+    }
+    fun updateFamilyBrand(id: Long, brand: String) {
+        val cv = ContentValues().apply { put("brand", brand) }
+        writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
+    }
+    fun getDistinctBrands(): List<String> {
+        val list = mutableListOf<String>()
+        val c = readableDatabase.rawQuery("SELECT DISTINCT brand FROM item_families WHERE brand IS NOT NULL AND brand != '' ORDER BY brand", null)
+        while (c.moveToNext()) list.add(c.getString(0))
+        c.close()
+        return list
     }
 
     // Variants
@@ -183,7 +208,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         val familiesArr = JSONArray()
         for (f in getFamilies()) {
             val fo = JSONObject()
-            fo.put("name", f.name); fo.put("category", f.category)
+            fo.put("name", f.name); fo.put("category", f.category); fo.put("brand", f.brand)
             val variantsArr = JSONArray()
             for (v in getVariants(f.id)) variantsArr.put(v.text)
             val colorsArr = JSONArray()
@@ -217,16 +242,6 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         return root
     }
 
-    fun clearAllData() {
-        val db = writableDatabase
-        db.execSQL("DELETE FROM dealers")
-        db.execSQL("DELETE FROM item_families")
-        db.execSQL("DELETE FROM family_variants")
-        db.execSQL("DELETE FROM family_colors")
-        db.execSQL("DELETE FROM orders")
-        db.execSQL("DELETE FROM order_items")
-    }
-
     fun importFromJson(root: JSONObject, clearFirst: Boolean) {
         val db = writableDatabase
         db.beginTransaction()
@@ -253,7 +268,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             for (i in 0 until familiesArr.length()) {
                 val fo = familiesArr.getJSONObject(i)
                 val fcv = ContentValues().apply {
-                    put("name", fo.optString("name")); put("category", fo.optString("category"))
+                    put("name", fo.optString("name")); put("category", fo.optString("category")); put("brand", fo.optString("brand", ""))
                 }
                 val familyId = db.insert("item_families", null, fcv)
 
