@@ -3,10 +3,7 @@ package com.dealerapp.orders
 import android.app.AlertDialog
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.widget.Button
-import android.widget.EditText
-import android.widget.ListView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
 class DealersActivity : AppCompatActivity() {
@@ -27,19 +24,33 @@ class DealersActivity : AppCompatActivity() {
 
     private fun refresh() {
         val dealers = db.getDealers()
-        val rows = dealers.map { RowData(it.id, "${it.name}\n${it.location} | ${it.mobile}") }.toMutableList()
-        listView.adapter = GenericAdapter(this, rows) { row ->
-            db.deleteDealer(row.id)
-            Toast.makeText(this, "Dealer removed", Toast.LENGTH_SHORT).show()
-            refresh()
+        val rows = mutableListOf<GroupRow>()
+        var lastLocation: String? = null
+        for (d in dealers) {
+            val label = if (d.location.isBlank()) "Unassigned Location" else d.location
+            if (label != lastLocation) {
+                rows.add(HeaderRow(label))
+                lastLocation = label
+            }
+            rows.add(DealerRow(d))
         }
+        listView.adapter = DealerGroupedAdapter(
+            this, rows,
+            onMove = { dealer -> showMoveLocationDialog(dealer) },
+            onDelete = { dealer ->
+                db.deleteDealer(dealer.id)
+                Toast.makeText(this, "Dealer removed", Toast.LENGTH_SHORT).show()
+                refresh()
+            }
+        )
     }
 
     private fun showAddDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_dealer, null)
         val nameEt = view.findViewById<EditText>(R.id.dealerName)
-        val locEt = view.findViewById<EditText>(R.id.dealerLocation)
+        val locEt = view.findViewById<AutoCompleteTextView>(R.id.dealerLocation)
         val mobEt = view.findViewById<EditText>(R.id.dealerMobile)
+        locEt.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, db.getDistinctLocations()))
 
         AlertDialog.Builder(this)
             .setTitle("Add Dealer")
@@ -54,6 +65,27 @@ class DealersActivity : AppCompatActivity() {
                     db.addDealer(name, loc, mob)
                     refresh()
                 }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showMoveLocationDialog(dealer: Dealer) {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_move_group, null)
+        val label = view.findViewById<TextView>(R.id.moveLabel)
+        val input = view.findViewById<AutoCompleteTextView>(R.id.moveInput)
+        label.text = "Move \"${dealer.name}\" to which location?"
+        input.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, db.getDistinctLocations()))
+        input.setText(dealer.location)
+
+        AlertDialog.Builder(this)
+            .setTitle("Move Dealer")
+            .setView(view)
+            .setPositiveButton("Move") { _, _ ->
+                val newLoc = input.text.toString().trim()
+                db.updateDealerLocation(dealer.id, newLoc)
+                Toast.makeText(this, "Moved to ${if (newLoc.isBlank()) "Unassigned Location" else newLoc}", Toast.LENGTH_SHORT).show()
+                refresh()
             }
             .setNegativeButton("Cancel", null)
             .show()
