@@ -7,4 +7,5 @@
 
     <EditText android:id="@+id/itemName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Family Name (e.g. Redmi Note 15 5G)"/>
     <Spinner android:id="@+id/itemCategory" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+    <AutoCompleteTextView android:id="@+id/itemBrand" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Brand (e.g. Xiaomi, Samsung)" android:layout_marginTop="8dp"/>
 </LinearLayout>
