@@ -14,8 +14,10 @@
         </activity>
         <activity android:name=".DealersActivity" android:exported="false" />
         <activity android:name=".ItemsActivity" android:exported="false" />
+        <activity android:name=".FamilyDetailActivity" android:exported="false" />
         <activity android:name=".OrdersActivity" android:exported="false" />
         <activity android:name=".NewOrderActivity" android:exported="false" />
+        <activity android:name=".EditOrderActivity" android:exported="false" />
         <activity android:name=".OrderDetailActivity" android:exported="false" />
     </application>
 </manifest>
