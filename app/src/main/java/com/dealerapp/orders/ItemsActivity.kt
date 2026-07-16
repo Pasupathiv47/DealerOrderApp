@@ -17,9 +17,15 @@ class ItemsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_list)
         db = DBHelper(this)
         listView = findViewById(R.id.listView)
+
         findViewById<Button>(R.id.btnTopAction).apply {
             text = "Add Item Family"
             setOnClickListener { showAddDialog() }
+        }
+        findViewById<Button>(R.id.btnSecondAction).apply {
+            text = "Manage Brands"
+            visibility = android.view.View.VISIBLE
+            setOnClickListener { startActivity(Intent(this@ItemsActivity, BrandsActivity::class.java)) }
         }
     }
 
@@ -56,13 +62,15 @@ class ItemsActivity : AppCompatActivity() {
         )
     }
 
+    private fun brandOptions(): List<String> = listOf("Unassigned") + db.getBrands().map { it.text }
+
     private fun showAddDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_item, null)
         val nameEt = view.findViewById<EditText>(R.id.itemName)
         val catSpinner = view.findViewById<Spinner>(R.id.itemCategory)
-        val brandEt = view.findViewById<AutoCompleteTextView>(R.id.itemBrand)
+        val brandSpinner = view.findViewById<Spinner>(R.id.itemBrand)
         catSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
-        brandEt.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, db.getDistinctBrands()))
+        brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions())
 
         AlertDialog.Builder(this)
             .setTitle("Add Item Family")
@@ -70,7 +78,8 @@ class ItemsActivity : AppCompatActivity() {
             .setPositiveButton("Save") { _, _ ->
                 val name = nameEt.text.toString().trim()
                 val category = catSpinner.selectedItem?.toString() ?: categories[0]
-                val brand = brandEt.text.toString().trim()
+                val brandSelected = brandSpinner.selectedItem?.toString() ?: "Unassigned"
+                val brand = if (brandSelected == "Unassigned") "" else brandSelected
                 if (name.isEmpty()) {
                     Toast.makeText(this, "Name required", Toast.LENGTH_SHORT).show()
                 } else {
@@ -87,16 +96,20 @@ class ItemsActivity : AppCompatActivity() {
     private fun showMoveBrandDialog(family: ItemFamily) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_move_group, null)
         val label = view.findViewById<TextView>(R.id.moveLabel)
-        val input = view.findViewById<AutoCompleteTextView>(R.id.moveInput)
+        val spinner = view.findViewById<Spinner>(R.id.moveInput)
         label.text = "Move \"${family.name}\" to which brand?"
-        input.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, db.getDistinctBrands()))
-        input.setText(family.brand)
+        val options = brandOptions()
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
+        val currentLabel = if (family.brand.isBlank()) "Unassigned" else family.brand
+        val currentIndex = options.indexOf(currentLabel)
+        if (currentIndex >= 0) spinner.setSelection(currentIndex)
 
         AlertDialog.Builder(this)
             .setTitle("Move Item")
             .setView(view)
             .setPositiveButton("Move") { _, _ ->
-                val newBrand = input.text.toString().trim()
+                val selected = spinner.selectedItem?.toString() ?: "Unassigned"
+                val newBrand = if (selected == "Unassigned") "" else selected
                 db.updateFamilyBrand(family.id, newBrand)
                 Toast.makeText(this, "Moved to ${if (newBrand.isBlank()) "Unassigned Brand" else newBrand}", Toast.LENGTH_SHORT).show()
                 refresh()
