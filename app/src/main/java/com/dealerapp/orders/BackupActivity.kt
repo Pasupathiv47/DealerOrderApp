@@ -16,6 +16,7 @@ import java.util.Date
 class BackupActivity : AppCompatActivity() {
     private lateinit var db: DBHelper
     private var pendingRestoreJson: JSONObject? = null
+    private var pendingBackupType: String = "all"
 
     companion object {
         const val REQ_CREATE_FILE = 101
@@ -28,14 +29,24 @@ class BackupActivity : AppCompatActivity() {
         db = DBHelper(this)
 
         findViewById<TextView>(R.id.backupInfoText).text =
-            "Backup saves all Dealers, Items and Orders into one file you choose (Google Drive, phone storage, etc).\n\nRestore reads that file back into the app."
+            "Choose what to back up. Restore will read any backup file and load only what it contains."
 
-        findViewById<Button>(R.id.btnBackupNow).setOnClickListener { startBackup() }
+        findViewById<Button>(R.id.btnBackupItems).setOnClickListener { startBackup("items") }
+        findViewById<Button>(R.id.btnBackupDealers).setOnClickListener { startBackup("dealers") }
+        findViewById<Button>(R.id.btnBackupOrders).setOnClickListener { startBackup("orders") }
+        findViewById<Button>(R.id.btnBackupAll).setOnClickListener { startBackup("all") }
         findViewById<Button>(R.id.btnRestoreNow).setOnClickListener { startRestorePick() }
     }
 
-    private fun startBackup() {
-        val fileName = "dealer_orders_backup_" + DateFormat.format("yyyyMMdd_HHmm", Date()).toString() + ".json"
+    private fun startBackup(type: String) {
+        pendingBackupType = type
+        val prefix = when (type) {
+            "items" -> "dealer_orders_items_"
+            "dealers" -> "dealer_orders_dealers_"
+            "orders" -> "dealer_orders_history_"
+            else -> "dealer_orders_backup_"
+        }
+        val fileName = prefix + DateFormat.format("yyyyMMdd_HHmm", Date()).toString() + ".json"
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/json"
@@ -60,7 +71,12 @@ class BackupActivity : AppCompatActivity() {
         when (requestCode) {
             REQ_CREATE_FILE -> {
                 try {
-                    val json = db.exportToJson()
+                    val json = when (pendingBackupType) {
+                        "items" -> db.exportItemsJson()
+                        "dealers" -> db.exportDealersJson()
+                        "orders" -> db.exportOrdersJson()
+                        else -> db.exportToJson()
+                    }
                     contentResolver.openOutputStream(uri)?.use { out ->
                         out.write(json.toString(2).toByteArray())
                     }
@@ -89,7 +105,7 @@ class BackupActivity : AppCompatActivity() {
     private fun confirmRestoreMode() {
         AlertDialog.Builder(this)
             .setTitle("Restore Data")
-            .setMessage("Merge will add backup data on top of what's already in the app.\n\nReplace All will erase current data first, then load the backup.")
+            .setMessage("Merge will add backup data on top of what's already in the app.\n\nReplace All will erase ALL current data (dealers, items, orders) before loading the backup, even if this file only contains part of it.")
             .setPositiveButton("Merge") { _, _ -> doRestore(false) }
             .setNegativeButton("Replace All") { _, _ -> confirmReplaceAll() }
             .setNeutralButton("Cancel", null)
@@ -99,7 +115,7 @@ class BackupActivity : AppCompatActivity() {
     private fun confirmReplaceAll() {
         AlertDialog.Builder(this)
             .setTitle("Are you sure?")
-            .setMessage("This will permanently delete all current Dealers, Items and Orders before restoring the backup.")
+            .setMessage("This will permanently delete ALL current Dealers, Items and Orders before restoring the backup.")
             .setPositiveButton("Yes, Replace All") { _, _ -> doRestore(true) }
             .setNegativeButton("Cancel", null)
             .show()
