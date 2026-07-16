@@ -22,5 +22,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnOrders).setOnClickListener {
             startActivity(Intent(this, OrdersActivity::class.java))
         }
+        findViewById<Button>(R.id.btnBackup).setOnClickListener {
+            startActivity(Intent(this, BackupActivity::class.java))
+        }
     }
 }
