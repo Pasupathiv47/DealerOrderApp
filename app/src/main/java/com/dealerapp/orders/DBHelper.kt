@@ -4,6 +4,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import org.json.JSONArray
+import org.json.JSONObject
 
 class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 2) {
 
@@ -163,5 +165,141 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         if (c.moveToFirst()) result = OrderSummary(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4))
         c.close()
         return result
+    }
+
+    // ---------- BACKUP & RESTORE ----------
+
+    fun exportToJson(): JSONObject {
+        val root = JSONObject()
+
+        val dealersArr = JSONArray()
+        for (d in getDealers()) {
+            val o = JSONObject()
+            o.put("name", d.name); o.put("location", d.location); o.put("mobile", d.mobile)
+            dealersArr.put(o)
+        }
+        root.put("dealers", dealersArr)
+
+        val familiesArr = JSONArray()
+        for (f in getFamilies()) {
+            val fo = JSONObject()
+            fo.put("name", f.name); fo.put("category", f.category)
+            val variantsArr = JSONArray()
+            for (v in getVariants(f.id)) variantsArr.put(v.text)
+            val colorsArr = JSONArray()
+            for (c in getColors(f.id)) colorsArr.put(c.text)
+            fo.put("variants", variantsArr)
+            fo.put("colors", colorsArr)
+            familiesArr.put(fo)
+        }
+        root.put("families", familiesArr)
+
+        val ordersArr = JSONArray()
+        for (o in getOrders()) {
+            val header = getOrderHeader(o.id)
+            val oo = JSONObject()
+            oo.put("dealer_name", header?.dealerName ?: "")
+            oo.put("dealer_location", header?.location ?: "")
+            oo.put("dealer_mobile", header?.mobile ?: "")
+            oo.put("order_date", header?.date ?: "")
+            val itemsArr = JSONArray()
+            for (line in getOrderLines(o.id)) {
+                val lo = JSONObject()
+                lo.put("item_name", line.itemName); lo.put("variant", line.variant)
+                lo.put("color", line.color); lo.put("qty", line.qty)
+                itemsArr.put(lo)
+            }
+            oo.put("items", itemsArr)
+            ordersArr.put(oo)
+        }
+        root.put("orders", ordersArr)
+
+        return root
+    }
+
+    fun clearAllData() {
+        val db = writableDatabase
+        db.execSQL("DELETE FROM dealers")
+        db.execSQL("DELETE FROM item_families")
+        db.execSQL("DELETE FROM family_variants")
+        db.execSQL("DELETE FROM family_colors")
+        db.execSQL("DELETE FROM orders")
+        db.execSQL("DELETE FROM order_items")
+    }
+
+    fun importFromJson(root: JSONObject, clearFirst: Boolean) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if (clearFirst) {
+                db.execSQL("DELETE FROM dealers")
+                db.execSQL("DELETE FROM item_families")
+                db.execSQL("DELETE FROM family_variants")
+                db.execSQL("DELETE FROM family_colors")
+                db.execSQL("DELETE FROM orders")
+                db.execSQL("DELETE FROM order_items")
+            }
+
+            val dealersArr = root.optJSONArray("dealers") ?: JSONArray()
+            for (i in 0 until dealersArr.length()) {
+                val o = dealersArr.getJSONObject(i)
+                val cv = ContentValues().apply {
+                    put("name", o.optString("name")); put("location", o.optString("location")); put("mobile", o.optString("mobile"))
+                }
+                db.insert("dealers", null, cv)
+            }
+
+            val familiesArr = root.optJSONArray("families") ?: JSONArray()
+            for (i in 0 until familiesArr.length()) {
+                val fo = familiesArr.getJSONObject(i)
+                val fcv = ContentValues().apply {
+                    put("name", fo.optString("name")); put("category", fo.optString("category"))
+                }
+                val familyId = db.insert("item_families", null, fcv)
+
+                val variantsArr = fo.optJSONArray("variants") ?: JSONArray()
+                for (j in 0 until variantsArr.length()) {
+                    val vcv = ContentValues().apply {
+                        put("family_id", familyId); put("variant_text", variantsArr.getString(j))
+                    }
+                    db.insert("family_variants", null, vcv)
+                }
+
+                val colorsArr = fo.optJSONArray("colors") ?: JSONArray()
+                for (j in 0 until colorsArr.length()) {
+                    val ccv = ContentValues().apply {
+                        put("family_id", familyId); put("color_text", colorsArr.getString(j))
+                    }
+                    db.insert("family_colors", null, ccv)
+                }
+            }
+
+            val ordersArr = root.optJSONArray("orders") ?: JSONArray()
+            for (i in 0 until ordersArr.length()) {
+                val oo = ordersArr.getJSONObject(i)
+                val ocv = ContentValues().apply {
+                    put("dealer_name", oo.optString("dealer_name"))
+                    put("dealer_location", oo.optString("dealer_location"))
+                    put("dealer_mobile", oo.optString("dealer_mobile"))
+                    put("order_date", oo.optString("order_date"))
+                }
+                val orderId = db.insert("orders", null, ocv)
+
+                val itemsArr = oo.optJSONArray("items") ?: JSONArray()
+                for (j in 0 until itemsArr.length()) {
+                    val lo = itemsArr.getJSONObject(j)
+                    val lcv = ContentValues().apply {
+                        put("order_id", orderId); put("item_name", lo.optString("item_name"))
+                        put("variant", lo.optString("variant")); put("color", lo.optString("color"))
+                        put("qty", lo.optInt("qty", 1))
+                    }
+                    db.insert("order_items", null, lcv)
+                }
+            }
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 }
