@@ -19,5 +19,6 @@
         <activity android:name=".NewOrderActivity" android:exported="false" />
         <activity android:name=".EditOrderActivity" android:exported="false" />
         <activity android:name=".OrderDetailActivity" android:exported="false" />
+        <activity android:name=".BackupActivity" android:exported="false" />
     </application>
 </manifest>
