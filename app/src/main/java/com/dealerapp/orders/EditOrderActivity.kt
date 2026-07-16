@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 class EditOrderActivity : AppCompatActivity() {
     private lateinit var db: DBHelper
     private lateinit var lineListView: ListView
+    private lateinit var totalText: TextView
     private var families: List<ItemFamily> = emptyList()
     private val orderLines = mutableListOf<OrderLine>()
     private var orderId: Long = -1
@@ -29,6 +30,7 @@ class EditOrderActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.editOrderDealerText).text = "Dealer: ${header?.dealerName ?: ""}"
 
         lineListView = findViewById(R.id.lineListView)
+        totalText = findViewById(R.id.totalText)
         families = db.getFamilies()
         orderLines.addAll(db.getOrderLines(orderId))
 
@@ -42,12 +44,14 @@ class EditOrderActivity : AppCompatActivity() {
 
     private fun refreshLines() {
         val rows = orderLines.mapIndexed { index, line ->
-            RowData(index.toLong(), "${line.itemName} - ${line.variant} - ${line.color} x${line.qty}")
+            RowData(index.toLong(), "${line.itemName} - ${line.variant} - ${line.color} x${line.qty}  (₹${"%.2f".format(line.dpPrice * line.qty)})")
         }.toMutableList()
         lineListView.adapter = GenericAdapter(this, rows) { row ->
             orderLines.removeAt(row.id.toInt())
             refreshLines()
         }
+        val total = orderLines.sumOf { it.dpPrice * it.qty }
+        totalText.text = "Total (DP): ₹${"%.2f".format(total)}"
     }
 
     private fun showAddLineDialog() {
@@ -60,6 +64,7 @@ class EditOrderActivity : AppCompatActivity() {
         val brandSpinner = view.findViewById<Spinner>(R.id.lineBrandSpinner)
         val familySpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
         val variantSpinner = view.findViewById<Spinner>(R.id.lineVariantSpinner)
+        val priceInfo = view.findViewById<TextView>(R.id.linePriceInfo)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
 
@@ -68,14 +73,26 @@ class EditOrderActivity : AppCompatActivity() {
 
         var categoryFiltered: List<ItemFamily> = families
         var filteredFamilies: List<ItemFamily> = families
+        var currentVariantDetails: List<VariantDetail> = emptyList()
+
+        fun updatePriceInfo(pos: Int) {
+            if (currentVariantDetails.isEmpty() || pos < 0 || pos >= currentVariantDetails.size) {
+                priceInfo.text = ""
+                return
+            }
+            val v = currentVariantDetails[pos]
+            priceInfo.text = "MOP: ₹${"%.2f".format(v.mop)}   DP: ₹${"%.2f".format(v.dp)}"
+        }
 
         fun updateVariantColor(pos: Int) {
             if (filteredFamilies.isEmpty()) return
             val family = filteredFamilies[pos]
-            val variants = db.getVariants(family.id).map { it.text }
+            currentVariantDetails = db.getVariantDetails(family.id)
+            val variantTexts = currentVariantDetails.map { it.text }
             val colors = db.getColors(family.id).map { it.text }
-            variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (variants.isEmpty()) listOf("-") else variants)
+            variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (variantTexts.isEmpty()) listOf("-") else variantTexts)
             colorSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, if (colors.isEmpty()) listOf("-") else colors)
+            updatePriceInfo(0)
         }
 
         fun updateFamilySpinner(brandLabel: String) {
@@ -122,6 +139,13 @@ class EditOrderActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
+        variantSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                updatePriceInfo(position)
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Add Item to Order")
             .setView(view)
@@ -134,7 +158,9 @@ class EditOrderActivity : AppCompatActivity() {
                 val variant = variantSpinner.selectedItem?.toString() ?: "-"
                 val color = colorSpinner.selectedItem?.toString() ?: "-"
                 val qty = qtyEt.text.toString().trim().toIntOrNull() ?: 1
-                orderLines.add(OrderLine(itemName, variant, color, qty))
+                val variantPos = variantSpinner.selectedItemPosition
+                val dpPrice = if (variantPos >= 0 && variantPos < currentVariantDetails.size) currentVariantDetails[variantPos].dp else 0.0
+                orderLines.add(OrderLine(itemName, variant, color, qty, dpPrice))
                 refreshLines()
             }
             .setNegativeButton("Cancel", null)
