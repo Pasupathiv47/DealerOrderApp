@@ -5,65 +5,95 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 1) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
-        db.execSQL("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, variants TEXT, colors TEXT)")
+        db.execSQL("CREATE TABLE item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT)")
+        db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
+        db.execSQL("CREATE TABLE family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
         db.execSQL("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, dealer_name TEXT, dealer_location TEXT, dealer_mobile TEXT, order_date TEXT)")
         db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS dealers")
-        db.execSQL("DROP TABLE IF EXISTS items")
-        db.execSQL("DROP TABLE IF EXISTS orders")
-        db.execSQL("DROP TABLE IF EXISTS order_items")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("DROP TABLE IF EXISTS items")
+            db.execSQL("CREATE TABLE IF NOT EXISTS item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
+        }
     }
 
+    // Dealers
     fun addDealer(name: String, location: String, mobile: String): Long {
-        val cv = ContentValues().apply {
-            put("name", name); put("location", location); put("mobile", mobile)
-        }
+        val cv = ContentValues().apply { put("name", name); put("location", location); put("mobile", mobile) }
         return writableDatabase.insert("dealers", null, cv)
     }
-
-    fun deleteDealer(id: Long) {
-        writableDatabase.delete("dealers", "id=?", arrayOf(id.toString()))
-    }
-
+    fun deleteDealer(id: Long) { writableDatabase.delete("dealers", "id=?", arrayOf(id.toString())) }
     fun getDealers(): List<Dealer> {
         val list = mutableListOf<Dealer>()
         val c = readableDatabase.rawQuery("SELECT id, name, location, mobile FROM dealers ORDER BY name", null)
-        while (c.moveToNext()) {
-            list.add(Dealer(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
-        }
+        while (c.moveToNext()) list.add(Dealer(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
         c.close()
         return list
     }
 
-    fun addItem(name: String, category: String, variants: String, colors: String): Long {
-        val cv = ContentValues().apply {
-            put("name", name); put("category", category); put("variants", variants); put("colors", colors)
-        }
-        return writableDatabase.insert("items", null, cv)
+    // Families
+    fun addFamily(name: String, category: String): Long {
+        val cv = ContentValues().apply { put("name", name); put("category", category) }
+        return writableDatabase.insert("item_families", null, cv)
+    }
+    fun deleteFamily(id: Long) {
+        val db = writableDatabase
+        db.delete("family_variants", "family_id=?", arrayOf(id.toString()))
+        db.delete("family_colors", "family_id=?", arrayOf(id.toString()))
+        db.delete("item_families", "id=?", arrayOf(id.toString()))
+    }
+    fun getFamilies(): List<ItemFamily> {
+        val list = mutableListOf<ItemFamily>()
+        val c = readableDatabase.rawQuery("SELECT id, name, category FROM item_families ORDER BY name", null)
+        while (c.moveToNext()) list.add(ItemFamily(c.getLong(0), c.getString(1), c.getString(2)))
+        c.close()
+        return list
+    }
+    fun getFamily(id: Long): ItemFamily? {
+        val c = readableDatabase.rawQuery("SELECT id, name, category FROM item_families WHERE id=?", arrayOf(id.toString()))
+        var result: ItemFamily? = null
+        if (c.moveToFirst()) result = ItemFamily(c.getLong(0), c.getString(1), c.getString(2))
+        c.close()
+        return result
     }
 
-    fun deleteItem(id: Long) {
-        writableDatabase.delete("items", "id=?", arrayOf(id.toString()))
+    // Variants
+    fun addVariant(familyId: Long, text: String): Long {
+        val cv = ContentValues().apply { put("family_id", familyId); put("variant_text", text) }
+        return writableDatabase.insert("family_variants", null, cv)
     }
-
-    fun getItems(): List<Item> {
-        val list = mutableListOf<Item>()
-        val c = readableDatabase.rawQuery("SELECT id, name, category, variants, colors FROM items ORDER BY name", null)
-        while (c.moveToNext()) {
-            list.add(Item(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4)))
-        }
+    fun deleteVariant(id: Long) { writableDatabase.delete("family_variants", "id=?", arrayOf(id.toString())) }
+    fun getVariants(familyId: Long): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, variant_text FROM family_variants WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
         c.close()
         return list
     }
 
+    // Colors
+    fun addColor(familyId: Long, text: String): Long {
+        val cv = ContentValues().apply { put("family_id", familyId); put("color_text", text) }
+        return writableDatabase.insert("family_colors", null, cv)
+    }
+    fun deleteColor(id: Long) { writableDatabase.delete("family_colors", "id=?", arrayOf(id.toString())) }
+    fun getColors(familyId: Long): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, color_text FROM family_colors WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
+        c.close()
+        return list
+    }
+
+    // Orders
     fun createOrder(dealerName: String, dealerLocation: String, dealerMobile: String, date: String, lines: List<OrderLine>): Long {
         val db = writableDatabase
         db.beginTransaction()
@@ -87,6 +117,24 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         }
     }
 
+    fun updateOrderLines(orderId: Long, lines: List<OrderLine>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("order_items", "order_id=?", arrayOf(orderId.toString()))
+            for (line in lines) {
+                val cv = ContentValues().apply {
+                    put("order_id", orderId); put("item_name", line.itemName)
+                    put("variant", line.variant); put("color", line.color); put("qty", line.qty)
+                }
+                db.insert("order_items", null, cv)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun deleteOrder(id: Long) {
         val db = writableDatabase
         db.delete("order_items", "order_id=?", arrayOf(id.toString()))
@@ -96,9 +144,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun getOrders(): List<OrderSummary> {
         val list = mutableListOf<OrderSummary>()
         val c = readableDatabase.rawQuery("SELECT id, dealer_name, order_date FROM orders ORDER BY id DESC", null)
-        while (c.moveToNext()) {
-            list.add(OrderSummary(c.getLong(0), c.getString(1), c.getString(2)))
-        }
+        while (c.moveToNext()) list.add(OrderSummary(c.getLong(0), c.getString(1), c.getString(2)))
         c.close()
         return list
     }
@@ -106,9 +152,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun getOrderLines(orderId: Long): List<OrderLine> {
         val list = mutableListOf<OrderLine>()
         val c = readableDatabase.rawQuery("SELECT item_name, variant, color, qty FROM order_items WHERE order_id=?", arrayOf(orderId.toString()))
-        while (c.moveToNext()) {
-            list.add(OrderLine(c.getString(0), c.getString(1), c.getString(2), c.getInt(3)))
-        }
+        while (c.moveToNext()) list.add(OrderLine(c.getString(0), c.getString(1), c.getString(2), c.getInt(3)))
         c.close()
         return list
     }
@@ -116,9 +160,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun getOrderHeader(orderId: Long): OrderSummary? {
         val c = readableDatabase.rawQuery("SELECT id, dealer_name, order_date, dealer_location, dealer_mobile FROM orders WHERE id=?", arrayOf(orderId.toString()))
         var result: OrderSummary? = null
-        if (c.moveToFirst()) {
-            result = OrderSummary(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4))
-        }
+        if (c.moveToFirst()) result = OrderSummary(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4))
         c.close()
         return result
     }
