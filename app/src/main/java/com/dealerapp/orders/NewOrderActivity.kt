@@ -80,15 +80,17 @@ class NewOrderActivity : AppCompatActivity() {
             return
         }
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_order_line, null)
+        val categorySpinner = view.findViewById<Spinner>(R.id.lineCategorySpinner)
         val brandSpinner = view.findViewById<Spinner>(R.id.lineBrandSpinner)
         val familySpinner = view.findViewById<Spinner>(R.id.lineItemSpinner)
         val variantSpinner = view.findViewById<Spinner>(R.id.lineVariantSpinner)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
 
-        val brandOptions = listOf("All Brands") + families.map { if (it.brand.isBlank()) "Unassigned" else it.brand }.distinct().sorted()
-        brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions)
+        val categoryOptions = listOf("All Categories") + families.map { if (it.category.isBlank()) "No Category" else it.category }.distinct().sorted()
+        categorySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categoryOptions)
 
+        var categoryFiltered: List<ItemFamily> = families
         var filteredFamilies: List<ItemFamily> = families
 
         fun updateVariantColor(pos: Int) {
@@ -102,18 +104,37 @@ class NewOrderActivity : AppCompatActivity() {
 
         fun updateFamilySpinner(brandLabel: String) {
             filteredFamilies = if (brandLabel == "All Brands") {
-                families
+                categoryFiltered
             } else {
-                families.filter { (if (it.brand.isBlank()) "Unassigned" else it.brand) == brandLabel }
+                categoryFiltered.filter { (if (it.brand.isBlank()) "Unassigned" else it.brand) == brandLabel }
             }
             familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filteredFamilies.map { it.name })
             if (filteredFamilies.isNotEmpty()) updateVariantColor(0)
         }
-        updateFamilySpinner("All Brands")
+
+        fun updateBrandSpinner(categoryLabel: String) {
+            categoryFiltered = if (categoryLabel == "All Categories") {
+                families
+            } else {
+                families.filter { (if (it.category.isBlank()) "No Category" else it.category) == categoryLabel }
+            }
+            val brandOptions = listOf("All Brands") + categoryFiltered.map { if (it.brand.isBlank()) "Unassigned" else it.brand }.distinct().sorted()
+            brandSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions)
+            updateFamilySpinner("All Brands")
+        }
+        updateBrandSpinner("All Categories")
+
+        categorySpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                updateBrandSpinner(categoryOptions[position])
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
 
         brandSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
-                updateFamilySpinner(brandOptions[position])
+                val selected = (brandSpinner.adapter as ArrayAdapter<String>).getItem(position) ?: "All Brands"
+                updateFamilySpinner(selected)
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
@@ -130,7 +151,7 @@ class NewOrderActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton("Add") { _, _ ->
                 if (filteredFamilies.isEmpty()) {
-                    Toast.makeText(this, "No items in this brand", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "No items match this filter", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 val itemName = familySpinner.selectedItem?.toString() ?: return@setPositiveButton
