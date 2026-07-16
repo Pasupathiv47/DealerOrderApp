@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 5) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 6) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
@@ -19,6 +19,16 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         db.execSQL("CREATE TABLE brands (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        db.execSQL("CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        seedDefaultCategories(db)
+    }
+
+    private fun seedDefaultCategories(db: SQLiteDatabase) {
+        val defaults = listOf("Smartphones", "Tabs", "Accessories", "TV", "Home Appliances")
+        for (name in defaults) {
+            val cv = ContentValues().apply { put("name", name) }
+            db.insert("categories", null, cv)
+        }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -37,6 +47,28 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         }
         if (oldVersion < 5) {
             db.execSQL("CREATE TABLE IF NOT EXISTS variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        }
+        if (oldVersion < 6) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+            val c = db.rawQuery("SELECT COUNT(*) FROM categories", null)
+            c.moveToFirst()
+            val count = c.getInt(0)
+            c.close()
+            if (count == 0) {
+                seedDefaultCategories(db)
+                val existingCats = db.rawQuery("SELECT DISTINCT category FROM item_families WHERE category IS NOT NULL AND category != ''", null)
+                while (existingCats.moveToNext()) {
+                    val catName = existingCats.getString(0)
+                    val exists = db.rawQuery("SELECT id FROM categories WHERE name=?", arrayOf(catName))
+                    val already = exists.moveToFirst()
+                    exists.close()
+                    if (!already) {
+                        val cv = ContentValues().apply { put("name", catName) }
+                        db.insert("categories", null, cv)
+                    }
+                }
+                existingCats.close()
+            }
         }
     }
 
@@ -85,6 +117,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     }
     fun updateFamilyBrand(id: Long, brand: String) {
         val cv = ContentValues().apply { put("brand", brand) }
+        writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
+    }
+    fun updateFamilyCategory(id: Long, category: String) {
+        val cv = ContentValues().apply { put("category", category) }
         writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
     }
 
@@ -153,6 +189,20 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     fun getVariantOptions(): List<RowData> {
         val list = mutableListOf<RowData>()
         val c = readableDatabase.rawQuery("SELECT id, name FROM variant_options ORDER BY name", null)
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
+        c.close()
+        return list
+    }
+
+    // Categories (master list)
+    fun addCategory(name: String): Long {
+        val cv = ContentValues().apply { put("name", name) }
+        return writableDatabase.insert("categories", null, cv)
+    }
+    fun deleteCategory(id: Long) { writableDatabase.delete("categories", "id=?", arrayOf(id.toString())) }
+    fun getCategories(): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, name FROM categories ORDER BY name", null)
         while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
         c.close()
         return list
@@ -256,6 +306,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (v in getVariantOptions()) variantOptionsArr.put(v.text)
         root.put("variant_options", variantOptionsArr)
 
+        val categoriesArr = JSONArray()
+        for (c in getCategories()) categoriesArr.put(c.text)
+        root.put("categories", categoriesArr)
+
         return root
     }
 
@@ -337,6 +391,10 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (v in getVariantOptions()) variantOptionsArr.put(v.text)
         root.put("variant_options", variantOptionsArr)
 
+        val categoriesArr = JSONArray()
+        for (c in getCategories()) categoriesArr.put(c.text)
+        root.put("categories", categoriesArr)
+
         val ordersArr = JSONArray()
         for (o in getOrders()) {
             val header = getOrderHeader(o.id)
@@ -374,6 +432,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 db.execSQL("DELETE FROM brands")
                 db.execSQL("DELETE FROM locations")
                 db.execSQL("DELETE FROM variant_options")
+                db.execSQL("DELETE FROM categories")
             }
 
             val dealersArr = root.optJSONArray("dealers") ?: JSONArray()
@@ -426,6 +485,18 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             for (i in 0 until variantOptionsArr.length()) {
                 val cv = ContentValues().apply { put("name", variantOptionsArr.getString(i)) }
                 db.insert("variant_options", null, cv)
+            }
+
+            val categoriesArr = root.optJSONArray("categories") ?: JSONArray()
+            for (i in 0 until categoriesArr.length()) {
+                val name = categoriesArr.getString(i)
+                val exists = db.rawQuery("SELECT id FROM categories WHERE name=?", arrayOf(name))
+                val already = exists.moveToFirst()
+                exists.close()
+                if (!already) {
+                    val cv = ContentValues().apply { put("name", name) }
+                    db.insert("categories", null, cv)
+                }
             }
 
             val ordersArr = root.optJSONArray("orders") ?: JSONArray()
