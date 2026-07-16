@@ -9,5 +9,6 @@
 
     <TextView android:id="@+id/orderRowText" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textSize="14sp"/>
     <Button android:id="@+id/orderRowCopyBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Copy" android:layout_marginEnd="6dp"/>
+    <Button android:id="@+id/orderRowEditBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Edit" android:layout_marginEnd="6dp"/>
     <Button android:id="@+id/orderRowDeleteBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Delete"/>
 </LinearLayout>
