@@ -1,6 +1,7 @@
 package com.dealerapp.orders
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.widget.ArrayAdapter
@@ -22,19 +23,29 @@ class ItemsActivity : AppCompatActivity() {
         db = DBHelper(this)
         listView = findViewById(R.id.listView)
         findViewById<Button>(R.id.btnTopAction).apply {
-            text = "Add Item"
+            text = "Add Item Family"
             setOnClickListener { showAddDialog() }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
         refresh()
     }
 
     private fun refresh() {
-        val items = db.getItems()
-        val rows = items.map { RowData(it.id, "${it.name} (${it.category})\nVariants: ${it.variants}\nColors: ${it.colors}") }.toMutableList()
+        val families = db.getFamilies()
+        val rows = families.map { RowData(it.id, "${it.name} (${it.category})\nTap to manage variants & colours") }.toMutableList()
         listView.adapter = GenericAdapter(this, rows) { row ->
-            db.deleteItem(row.id)
-            Toast.makeText(this, "Item removed", Toast.LENGTH_SHORT).show()
+            db.deleteFamily(row.id)
+            Toast.makeText(this, "Item family removed", Toast.LENGTH_SHORT).show()
             refresh()
+        }
+        listView.setOnItemClickListener { _, _, position, _ ->
+            val family = families[position]
+            val intent = Intent(this, FamilyDetailActivity::class.java)
+            intent.putExtra("family_id", family.id)
+            startActivity(intent)
         }
     }
 
@@ -42,24 +53,21 @@ class ItemsActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_item, null)
         val nameEt = view.findViewById<EditText>(R.id.itemName)
         val catSpinner = view.findViewById<Spinner>(R.id.itemCategory)
-        val variantsEt = view.findViewById<EditText>(R.id.itemVariants)
-        val colorsEt = view.findViewById<EditText>(R.id.itemColors)
-
         catSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
 
         AlertDialog.Builder(this)
-            .setTitle("Add Item")
+            .setTitle("Add Item Family")
             .setView(view)
             .setPositiveButton("Save") { _, _ ->
                 val name = nameEt.text.toString().trim()
                 val category = catSpinner.selectedItem?.toString() ?: categories[0]
-                val variants = variantsEt.text.toString().trim()
-                val colors = colorsEt.text.toString().trim()
                 if (name.isEmpty()) {
-                    Toast.makeText(this, "Item name required", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Name required", Toast.LENGTH_SHORT).show()
                 } else {
-                    db.addItem(name, category, variants, colors)
-                    refresh()
+                    val id = db.addFamily(name, category)
+                    val intent = Intent(this, FamilyDetailActivity::class.java)
+                    intent.putExtra("family_id", id)
+                    startActivity(intent)
                 }
             }
             .setNegativeButton("Cancel", null)
