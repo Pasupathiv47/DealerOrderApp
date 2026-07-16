@@ -6,6 +6,6 @@
     android:padding="20dp">
 
     <EditText android:id="@+id/dealerName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Dealer Name"/>
-    <EditText android:id="@+id/dealerLocation" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Location"/>
-    <EditText android:id="@+id/dealerMobile" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Mobile Number" android:inputType="phone"/>
+    <AutoCompleteTextView android:id="@+id/dealerLocation" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Location" android:layout_marginTop="8dp"/>
+    <EditText android:id="@+id/dealerMobile" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Mobile Number" android:inputType="phone" android:layout_marginTop="8dp"/>
 </LinearLayout>
