@@ -7,7 +7,16 @@
     android:gravity="center_vertical"
     android:descendantFocusability="blocksDescendants">
 
-    <TextView android:id="@+id/familyRowText" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textSize="15sp"/>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginEnd="6dp">
+        <TextView android:id="@+id/familyRowText" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="15sp"/>
+        <TextView android:id="@+id/familyRowSubtext" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="#777777"/>
+    </LinearLayout>
+
     <Button android:id="@+id/familyMoveBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Move" android:layout_marginEnd="6dp"/>
     <Button android:id="@+id/familyDeleteBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Delete"/>
 </LinearLayout>
