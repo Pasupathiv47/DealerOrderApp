@@ -67,7 +67,7 @@ class ItemsActivity : AppCompatActivity() {
     private fun refresh() {
         allFamilies = db.getFamilies()
 
-        val categoryOptions = listOf("All Categories") + db.getCategories().map { it.text }
+        val categoryOptions = listOf("All Categories") + db.getCategories().map { it.name }
         val previousCategory = categoryFilterSpinner.selectedItem?.toString()
         categoryFilterSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categoryOptions)
         val catIdx = categoryOptions.indexOf(previousCategory)
@@ -121,7 +121,7 @@ class ItemsActivity : AppCompatActivity() {
     }
 
     private fun brandOptions(): List<String> = listOf("Unassigned") + db.getBrands().map { it.text }
-    private fun categoryOptions(): List<String> = db.getCategories().map { it.text }
+    private fun categoryOptions(): List<String> = db.getCategories().map { it.name }
 
     private fun showAddDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_add_item, null)
