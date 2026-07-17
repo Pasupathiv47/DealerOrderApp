@@ -35,5 +35,6 @@
         <EditText android:id="@+id/colorInput" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="e.g. Midnight Black"/>
         <Button android:id="@+id/btnAddColor" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Add"/>
     </LinearLayout>
+    <Button android:id="@+id/btnAddAnyColour" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="+ Add &quot;Any Colour&quot;" android:layout_marginTop="4dp"/>
     <ListView android:id="@+id/colorListView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
 </LinearLayout>
