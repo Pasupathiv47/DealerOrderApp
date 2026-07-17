@@ -3,6 +3,7 @@ package com.dealerapp.orders
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -19,6 +20,11 @@ class FamilyDetailActivity : AppCompatActivity() {
     private lateinit var colorList: ListView
     private lateinit var variantSpinner: Spinner
     private lateinit var titleText: TextView
+    private lateinit var variantSectionLabel: TextView
+    private lateinit var variantHeaderRow: View
+    private lateinit var variantAddRow: View
+    private lateinit var noVariantsNote: TextView
+    private var currentVariantType = "ram_storage"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,9 +36,13 @@ class FamilyDetailActivity : AppCompatActivity() {
         variantList = findViewById(R.id.variantListView)
         colorList = findViewById(R.id.colorListView)
         variantSpinner = findViewById(R.id.variantSpinner)
+        variantSectionLabel = findViewById(R.id.variantSectionLabel)
+        variantHeaderRow = findViewById(R.id.variantHeaderRow)
+        variantAddRow = findViewById(R.id.variantAddRow)
+        noVariantsNote = findViewById(R.id.noVariantsNote)
 
         updateTitle()
-        loadVariantOptions()
+        setupVariantSection()
 
         findViewById<Button>(R.id.btnChangeCategory).setOnClickListener { showChangeCategoryDialog() }
 
@@ -63,14 +73,12 @@ class FamilyDetailActivity : AppCompatActivity() {
             db.addColor(familyId, "Any Colour")
             refresh()
         }
-
-        refresh()
     }
 
     override fun onResume() {
         super.onResume()
-        loadVariantOptions()
         updateTitle()
+        setupVariantSection()
     }
 
     private fun updateTitle() {
@@ -80,13 +88,46 @@ class FamilyDetailActivity : AppCompatActivity() {
         titleText.text = "${family?.name ?: ""}\nCategory: $catLabel\nBrand: $brandLabel"
     }
 
-    private fun loadVariantOptions() {
-        val options = db.getVariantOptions().map { it.text }
+    private fun setupVariantSection() {
+        val family = db.getFamily(familyId)
+        val catDetail = family?.let { db.getCategoryByName(it.category) }
+        currentVariantType = catDetail?.variantType ?: "ram_storage"
+
+        when (currentVariantType) {
+            "none" -> {
+                variantHeaderRow.visibility = View.GONE
+                variantAddRow.visibility = View.GONE
+                noVariantsNote.visibility = View.VISIBLE
+                noVariantsNote.text = "This category has no variants. Set the price for this item below."
+                if (db.getVariantDetails(familyId).isEmpty()) {
+                    db.addVariant(familyId, "Standard", 0.0, 0.0)
+                }
+            }
+            "size" -> {
+                variantHeaderRow.visibility = View.VISIBLE
+                variantAddRow.visibility = View.VISIBLE
+                noVariantsNote.visibility = View.GONE
+                variantSectionLabel.text = "Size Variants"
+                loadVariantOptions("size")
+            }
+            else -> {
+                variantHeaderRow.visibility = View.VISIBLE
+                variantAddRow.visibility = View.VISIBLE
+                noVariantsNote.visibility = View.GONE
+                variantSectionLabel.text = "RAM + Storage Variants"
+                loadVariantOptions("ram_storage")
+            }
+        }
+        refresh()
+    }
+
+    private fun loadVariantOptions(type: String) {
+        val options = db.getVariantOptions(type).map { it.text }
         variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
     }
 
     private fun showChangeCategoryDialog() {
-        val categories = db.getCategories().map { it.text }
+        val categories = db.getCategories().map { it.name }
         if (categories.isEmpty()) {
             Toast.makeText(this, "Add a category first via Manage Categories", Toast.LENGTH_SHORT).show()
             return
@@ -106,6 +147,7 @@ class FamilyDetailActivity : AppCompatActivity() {
                 val selected = spinner.selectedItem?.toString() ?: return@setPositiveButton
                 db.updateFamilyCategory(familyId, selected)
                 updateTitle()
+                setupVariantSection()
                 Toast.makeText(this, "Category updated", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
@@ -146,9 +188,13 @@ class FamilyDetailActivity : AppCompatActivity() {
             this, variants,
             onEdit = { v -> showPriceDialog(v, v.text) },
             onDelete = { v ->
-                db.deleteVariant(v.id)
-                Toast.makeText(this, "Variant removed", Toast.LENGTH_SHORT).show()
-                refresh()
+                if (currentVariantType == "none") {
+                    Toast.makeText(this, "This category doesn't use variants", Toast.LENGTH_SHORT).show()
+                } else {
+                    db.deleteVariant(v.id)
+                    Toast.makeText(this, "Variant removed", Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
             }
         )
 
