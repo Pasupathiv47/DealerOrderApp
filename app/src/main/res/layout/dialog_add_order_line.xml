@@ -21,6 +21,8 @@
         <Spinner android:id="@+id/lineVariantSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
         <TextView android:id="@+id/linePriceInfo" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp" android:layout_marginTop="4dp"/>
         <Spinner android:id="@+id/lineColorSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
-        <EditText android:id="@+id/lineQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Quantity" android:inputType="number" android:layout_marginTop="8dp"/>
+        <EditText android:id="@+id/lineQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Quantity" android:inputType="number" android:text="1" android:layout_marginTop="8dp"/>
+
+        <TextView android:id="@+id/lineAddedCount" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp" android:textStyle="italic" android:layout_marginTop="10dp" android:text=""/>
     </LinearLayout>
 </ScrollView>
