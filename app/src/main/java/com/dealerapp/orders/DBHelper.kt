@@ -98,7 +98,9 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     // Families
     fun addFamily(name: String, category: String, brand: String): Long {
         val cv = ContentValues().apply { put("name", name); put("category", category); put("brand", brand) }
-        return writableDatabase.insert("item_families", null, cv)
+        val familyId = writableDatabase.insert("item_families", null, cv)
+        addColor(familyId, "Any Colour")
+        return familyId
     }
     fun deleteFamily(id: Long) {
         val db = writableDatabase
