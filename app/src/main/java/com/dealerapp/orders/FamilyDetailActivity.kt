@@ -59,6 +59,11 @@ class FamilyDetailActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<Button>(R.id.btnAddAnyColour).setOnClickListener {
+            db.addColor(familyId, "Any Colour")
+            refresh()
+        }
+
         refresh()
     }
 
