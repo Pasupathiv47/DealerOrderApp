@@ -15,8 +15,20 @@
         <Button android:id="@+id/btnThirdAction" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Manage Categories"/>
     </LinearLayout>
 
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Filter by Category" android:textStyle="bold" android:layout_marginBottom="4dp"/>
-    <Spinner android:id="@+id/categoryFilterSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginEnd="6dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Filter by Category" android:textStyle="bold" android:layout_marginBottom="4dp"/>
+            <Spinner android:id="@+id/categoryFilterSpinner" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Filter by Brand" android:textStyle="bold" android:layout_marginBottom="4dp"/>
+            <Spinner android:id="@+id/brandFilterSpinner" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        </LinearLayout>
+    </LinearLayout>
 
     <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent"/>
 </LinearLayout>
