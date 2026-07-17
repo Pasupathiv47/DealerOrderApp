@@ -11,7 +11,10 @@ class ItemsActivity : AppCompatActivity() {
     private lateinit var db: DBHelper
     private lateinit var listView: ListView
     private lateinit var categoryFilterSpinner: Spinner
+    private lateinit var brandFilterSpinner: Spinner
     private var allFamilies: List<ItemFamily> = emptyList()
+    private var savedScrollPosition = 0
+    private var savedScrollOffset = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,6 +22,7 @@ class ItemsActivity : AppCompatActivity() {
         db = DBHelper(this)
         listView = findViewById(R.id.listView)
         categoryFilterSpinner = findViewById(R.id.categoryFilterSpinner)
+        brandFilterSpinner = findViewById(R.id.brandFilterSpinner)
 
         findViewById<Button>(R.id.btnTopAction).apply {
             text = "Add Item Family"
@@ -39,6 +43,13 @@ class ItemsActivity : AppCompatActivity() {
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
+
+        brandFilterSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, v: android.view.View?, position: Int, id: Long) {
+                applyFilter()
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
     }
 
     override fun onResume() {
@@ -46,19 +57,38 @@ class ItemsActivity : AppCompatActivity() {
         refresh()
     }
 
+    override fun onPause() {
+        super.onPause()
+        savedScrollPosition = listView.firstVisiblePosition
+        val v = listView.getChildAt(0)
+        savedScrollOffset = v?.top ?: 0
+    }
+
     private fun refresh() {
         allFamilies = db.getFamilies()
+
         val categoryOptions = listOf("All Categories") + db.getCategories().map { it.text }
-        val previousSelection = categoryFilterSpinner.selectedItem?.toString()
+        val previousCategory = categoryFilterSpinner.selectedItem?.toString()
         categoryFilterSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categoryOptions)
-        val idx = categoryOptions.indexOf(previousSelection)
-        if (idx >= 0) categoryFilterSpinner.setSelection(idx)
+        val catIdx = categoryOptions.indexOf(previousCategory)
+        if (catIdx >= 0) categoryFilterSpinner.setSelection(catIdx)
+
+        val brandOptions = listOf("All Brands") + db.getBrands().map { it.text }
+        val previousBrand = brandFilterSpinner.selectedItem?.toString()
+        brandFilterSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, brandOptions)
+        val brandIdx = brandOptions.indexOf(previousBrand)
+        if (brandIdx >= 0) brandFilterSpinner.setSelection(brandIdx)
+
         applyFilter()
     }
 
     private fun applyFilter() {
         val selectedCategory = categoryFilterSpinner.selectedItem?.toString() ?: "All Categories"
-        val families = if (selectedCategory == "All Categories") allFamilies else allFamilies.filter { it.category == selectedCategory }
+        val selectedBrand = brandFilterSpinner.selectedItem?.toString() ?: "All Brands"
+
+        var families = allFamilies
+        if (selectedCategory != "All Categories") families = families.filter { it.category == selectedCategory }
+        if (selectedBrand != "All Brands") families = families.filter { (if (it.brand.isBlank()) "Unassigned" else it.brand) == selectedBrand }
 
         val rows = mutableListOf<GroupRow>()
         var lastBrand: String? = null
@@ -84,6 +114,10 @@ class ItemsActivity : AppCompatActivity() {
                 refresh()
             }
         )
+
+        listView.post {
+            listView.setSelectionFromTop(savedScrollPosition, savedScrollOffset)
+        }
     }
 
     private fun brandOptions(): List<String> = listOf("Unassigned") + db.getBrands().map { it.text }
