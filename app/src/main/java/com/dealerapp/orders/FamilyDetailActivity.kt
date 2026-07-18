@@ -24,7 +24,7 @@ class FamilyDetailActivity : AppCompatActivity() {
     private lateinit var variantHeaderRow: View
     private lateinit var variantAddRow: View
     private lateinit var noVariantsNote: TextView
-    private var currentVariantType = "ram_storage"
+    private var currentGroupId: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,38 +91,28 @@ class FamilyDetailActivity : AppCompatActivity() {
     private fun setupVariantSection() {
         val family = db.getFamily(familyId)
         val catDetail = family?.let { db.getCategoryByName(it.category) }
-        currentVariantType = catDetail?.variantType ?: "ram_storage"
+        currentGroupId = catDetail?.variantGroupId
 
-        when (currentVariantType) {
-            "none" -> {
-                variantHeaderRow.visibility = View.GONE
-                variantAddRow.visibility = View.GONE
-                noVariantsNote.visibility = View.VISIBLE
-                noVariantsNote.text = "This category has no variants. Set the price for this item below."
-                if (db.getVariantDetails(familyId).isEmpty()) {
-                    db.addVariant(familyId, "Standard", 0.0, 0.0)
-                }
+        if (currentGroupId == null) {
+            variantHeaderRow.visibility = View.GONE
+            variantAddRow.visibility = View.GONE
+            noVariantsNote.visibility = View.VISIBLE
+            noVariantsNote.text = "This category has no variants. Set the price for this item below."
+            if (db.getVariantDetails(familyId).isEmpty()) {
+                db.addVariant(familyId, "Standard", 0.0, 0.0)
             }
-            "size" -> {
-                variantHeaderRow.visibility = View.VISIBLE
-                variantAddRow.visibility = View.VISIBLE
-                noVariantsNote.visibility = View.GONE
-                variantSectionLabel.text = "Size Variants"
-                loadVariantOptions("size")
-            }
-            else -> {
-                variantHeaderRow.visibility = View.VISIBLE
-                variantAddRow.visibility = View.VISIBLE
-                noVariantsNote.visibility = View.GONE
-                variantSectionLabel.text = "RAM + Storage Variants"
-                loadVariantOptions("ram_storage")
-            }
+        } else {
+            variantHeaderRow.visibility = View.VISIBLE
+            variantAddRow.visibility = View.VISIBLE
+            noVariantsNote.visibility = View.GONE
+            variantSectionLabel.text = "${catDetail?.variantGroupName ?: "Variant"} Options"
+            loadVariantOptions(currentGroupId!!)
         }
         refresh()
     }
 
-    private fun loadVariantOptions(type: String) {
-        val options = db.getVariantOptions(type).map { it.text }
+    private fun loadVariantOptions(groupId: Long) {
+        val options = db.getVariantOptions(groupId).map { it.text }
         variantSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
     }
 
@@ -188,7 +178,7 @@ class FamilyDetailActivity : AppCompatActivity() {
             this, variants,
             onEdit = { v -> showPriceDialog(v, v.text) },
             onDelete = { v ->
-                if (currentVariantType == "none") {
+                if (currentGroupId == null) {
                     Toast.makeText(this, "This category doesn't use variants", Toast.LENGTH_SHORT).show()
                 } else {
                     db.deleteVariant(v.id)
