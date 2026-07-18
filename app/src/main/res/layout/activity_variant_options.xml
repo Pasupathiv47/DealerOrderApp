@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+        <Button android:id="@+id/btnTopAction" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Add Variant" android:layout_marginEnd="6dp"/>
+        <Button android:id="@+id/btnSecondAction" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Manage Variant Types"/>
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Filter by Type" android:textStyle="bold" android:layout_marginBottom="4dp"/>
+    <Spinner android:id="@+id/groupFilterSpinner" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"/>
+
+    <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+</LinearLayout>
