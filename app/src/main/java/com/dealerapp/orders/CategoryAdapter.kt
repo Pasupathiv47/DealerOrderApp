@@ -18,12 +18,7 @@ class CategoryAdapter(
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.row_variant, parent, false)
         val item = items[position]
-        val typeLabel = when (item.variantType) {
-            "size" -> "Size Variants"
-            "none" -> "No Variants"
-            else -> "RAM + Storage"
-        }
-        view.findViewById<TextView>(R.id.variantRowText).text = "${item.name}\n$typeLabel"
+        view.findViewById<TextView>(R.id.variantRowText).text = "${item.name}\n${item.variantGroupName}"
         view.findViewById<Button>(R.id.variantEditBtn).setOnClickListener { onEdit(item) }
         view.findViewById<Button>(R.id.variantDeleteBtn).setOnClickListener { onDelete(item) }
         return view
