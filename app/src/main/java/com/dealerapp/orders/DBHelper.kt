@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 8) {
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db", null, 9) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
@@ -18,21 +18,28 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER, dp_price REAL DEFAULT 0)")
         db.execSQL("CREATE TABLE brands (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
         db.execSQL("CREATE TABLE locations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
-        db.execSQL("CREATE TABLE variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, option_type TEXT DEFAULT 'ram_storage')")
-        db.execSQL("CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, variant_type TEXT DEFAULT 'ram_storage')")
-        seedDefaultCategories(db)
+        db.execSQL("CREATE TABLE variant_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        db.execSQL("CREATE TABLE variant_options (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER, name TEXT)")
+        db.execSQL("CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, variant_group_id INTEGER)")
+        seedDefaults(db)
     }
 
-    private fun seedDefaultCategories(db: SQLiteDatabase) {
-        val defaults = listOf(
-            "Smartphones" to "ram_storage",
-            "Tabs" to "ram_storage",
-            "Accessories" to "none",
-            "TV" to "size",
-            "Home Appliances" to "size"
+    private fun seedDefaults(db: SQLiteDatabase) {
+        val ramGroupId = db.insert("variant_groups", null, ContentValues().apply { put("name", "RAM + Storage") })
+        val sizeGroupId = db.insert("variant_groups", null, ContentValues().apply { put("name", "Size") })
+
+        val catDefaults = listOf(
+            "Smartphones" to ramGroupId,
+            "Tabs" to ramGroupId,
+            "Accessories" to null,
+            "TV" to sizeGroupId,
+            "Home Appliances" to sizeGroupId
         )
-        for ((name, type) in defaults) {
-            val cv = ContentValues().apply { put("name", name); put("variant_type", type) }
+        for ((name, groupId) in catDefaults) {
+            val cv = ContentValues().apply {
+                put("name", name)
+                if (groupId != null) put("variant_group_id", groupId) else putNull("variant_group_id")
+            }
             db.insert("categories", null, cv)
         }
     }
@@ -45,36 +52,50 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         db.execSQL("CREATE TABLE IF NOT EXISTS item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT)")
         db.execSQL("CREATE TABLE IF NOT EXISTS family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT)")
         db.execSQL("CREATE TABLE IF NOT EXISTS family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS variant_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
 
         try { db.execSQL("ALTER TABLE item_families ADD COLUMN brand TEXT DEFAULT ''") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE family_variants ADD COLUMN mop_price REAL DEFAULT 0") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE family_variants ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE order_items ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
-        try { db.execSQL("ALTER TABLE categories ADD COLUMN variant_type TEXT DEFAULT 'ram_storage'") } catch (e: Exception) { }
-        try { db.execSQL("ALTER TABLE variant_options ADD COLUMN option_type TEXT DEFAULT 'ram_storage'") } catch (e: Exception) { }
+        try { db.execSQL("ALTER TABLE categories ADD COLUMN variant_type TEXT") } catch (e: Exception) { }
+        try { db.execSQL("ALTER TABLE variant_options ADD COLUMN option_type TEXT") } catch (e: Exception) { }
+        try { db.execSQL("ALTER TABLE categories ADD COLUMN variant_group_id INTEGER") } catch (e: Exception) { }
+        try { db.execSQL("ALTER TABLE variant_options ADD COLUMN group_id INTEGER") } catch (e: Exception) { }
 
         if (oldVersion < 2) {
             db.execSQL("DROP TABLE IF EXISTS items")
         }
 
-        val c = db.rawQuery("SELECT COUNT(*) FROM categories", null)
-        c.moveToFirst()
-        val count = c.getInt(0)
-        c.close()
-        if (count == 0) {
-            seedDefaultCategories(db)
-            val existingCats = db.rawQuery("SELECT DISTINCT category FROM item_families WHERE category IS NOT NULL AND category != ''", null)
-            while (existingCats.moveToNext()) {
-                val catName = existingCats.getString(0)
-                val exists = db.rawQuery("SELECT id FROM categories WHERE name=?", arrayOf(catName))
-                val already = exists.moveToFirst()
-                exists.close()
-                if (!already) {
-                    val cv = ContentValues().apply { put("name", catName); put("variant_type", "ram_storage") }
-                    db.insert("categories", null, cv)
-                }
+        val cc = db.rawQuery("SELECT COUNT(*) FROM categories", null)
+        cc.moveToFirst()
+        val catCount = cc.getInt(0)
+        cc.close()
+        if (catCount == 0) {
+            seedDefaults(db)
+        }
+
+        if (oldVersion in 1..8) {
+            val gc = db.rawQuery("SELECT COUNT(*) FROM variant_groups", null)
+            gc.moveToFirst()
+            val groupCount = gc.getInt(0)
+            gc.close()
+
+            if (groupCount == 0) {
+                val ramGroupId = db.insert("variant_groups", null, ContentValues().apply { put("name", "RAM + Storage") })
+                val sizeGroupId = db.insert("variant_groups", null, ContentValues().apply { put("name", "Size") })
+
+                try {
+                    db.execSQL("UPDATE variant_options SET group_id=$ramGroupId WHERE option_type='ram_storage' OR option_type IS NULL")
+                    db.execSQL("UPDATE variant_options SET group_id=$sizeGroupId WHERE option_type='size'")
+                } catch (e: Exception) { }
+
+                try {
+                    db.execSQL("UPDATE categories SET variant_group_id=$ramGroupId WHERE variant_type='ram_storage' OR variant_type IS NULL")
+                    db.execSQL("UPDATE categories SET variant_group_id=$sizeGroupId WHERE variant_type='size'")
+                    db.execSQL("UPDATE categories SET variant_group_id=NULL WHERE variant_type='none'")
+                } catch (e: Exception) { }
             }
-            existingCats.close()
         }
     }
 
@@ -100,7 +121,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         val familyId = writableDatabase.insert("item_families", null, cv)
         addColor(familyId, "Any Colour")
         val catDetail = getCategoryByName(category)
-        if (catDetail?.variantType == "none") {
+        if (catDetail?.variantGroupId == null) {
             addVariant(familyId, "Standard", 0.0, 0.0)
         }
         return familyId
@@ -193,42 +214,88 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         return list
     }
 
-    fun addVariantOption(name: String, type: String): Long {
-        val cv = ContentValues().apply { put("name", name); put("option_type", type) }
+    fun addVariantGroup(name: String): Long {
+        val cv = ContentValues().apply { put("name", name) }
+        return writableDatabase.insert("variant_groups", null, cv)
+    }
+    fun deleteVariantGroup(id: Long) {
+        val db = writableDatabase
+        db.delete("variant_options", "group_id=?", arrayOf(id.toString()))
+        db.execSQL("UPDATE categories SET variant_group_id=NULL WHERE variant_group_id=$id")
+        db.delete("variant_groups", "id=?", arrayOf(id.toString()))
+    }
+    fun getVariantGroups(): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, name FROM variant_groups ORDER BY name", null)
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
+        c.close()
+        return list
+    }
+    fun getVariantGroupByName(name: String): RowData? {
+        val c = readableDatabase.rawQuery("SELECT id, name FROM variant_groups WHERE name=?", arrayOf(name))
+        var result: RowData? = null
+        if (c.moveToFirst()) result = RowData(c.getLong(0), c.getString(1))
+        c.close()
+        return result
+    }
+    fun getOrCreateVariantGroupId(name: String): Long {
+        val existing = getVariantGroupByName(name)
+        if (existing != null) return existing.id
+        return addVariantGroup(name)
+    }
+
+    fun addVariantOption(groupId: Long, name: String): Long {
+        val cv = ContentValues().apply { put("group_id", groupId); put("name", name) }
         return writableDatabase.insert("variant_options", null, cv)
     }
     fun deleteVariantOption(id: Long) { writableDatabase.delete("variant_options", "id=?", arrayOf(id.toString())) }
-    fun getVariantOptions(type: String? = null): List<VariantOptionDetail> {
-        val list = mutableListOf<VariantOptionDetail>()
-        val c = if (type != null)
-            readableDatabase.rawQuery("SELECT id, name, option_type FROM variant_options WHERE option_type=? ORDER BY name", arrayOf(type))
-        else
-            readableDatabase.rawQuery("SELECT id, name, option_type FROM variant_options ORDER BY name", null)
-        while (c.moveToNext()) list.add(VariantOptionDetail(c.getLong(0), c.getString(1), c.getString(2) ?: "ram_storage"))
+    fun getVariantOptions(groupId: Long): List<RowData> {
+        val list = mutableListOf<RowData>()
+        val c = readableDatabase.rawQuery("SELECT id, name FROM variant_options WHERE group_id=? ORDER BY name", arrayOf(groupId.toString()))
+        while (c.moveToNext()) list.add(RowData(c.getLong(0), c.getString(1)))
         c.close()
         return list
     }
 
-    fun addCategory(name: String, variantType: String): Long {
-        val cv = ContentValues().apply { put("name", name); put("variant_type", variantType) }
+    fun addCategory(name: String, variantGroupId: Long?): Long {
+        val cv = ContentValues().apply {
+            put("name", name)
+            if (variantGroupId != null) put("variant_group_id", variantGroupId) else putNull("variant_group_id")
+        }
         return writableDatabase.insert("categories", null, cv)
     }
-    fun updateCategoryType(id: Long, variantType: String) {
-        val cv = ContentValues().apply { put("variant_type", variantType) }
+    fun updateCategoryGroup(id: Long, variantGroupId: Long?) {
+        val cv = ContentValues().apply {
+            if (variantGroupId != null) put("variant_group_id", variantGroupId) else putNull("variant_group_id")
+        }
         writableDatabase.update("categories", cv, "id=?", arrayOf(id.toString()))
     }
     fun deleteCategory(id: Long) { writableDatabase.delete("categories", "id=?", arrayOf(id.toString())) }
     fun getCategories(): List<CategoryDetail> {
         val list = mutableListOf<CategoryDetail>()
-        val c = readableDatabase.rawQuery("SELECT id, name, variant_type FROM categories ORDER BY name", null)
-        while (c.moveToNext()) list.add(CategoryDetail(c.getLong(0), c.getString(1), c.getString(2) ?: "ram_storage"))
+        val c = readableDatabase.rawQuery(
+            "SELECT c.id, c.name, c.variant_group_id, g.name FROM categories c LEFT JOIN variant_groups g ON c.variant_group_id = g.id ORDER BY c.name",
+            null
+        )
+        while (c.moveToNext()) {
+            val groupId = if (c.isNull(2)) null else c.getLong(2)
+            val groupName = if (c.isNull(3)) "No Variants" else c.getString(3)
+            list.add(CategoryDetail(c.getLong(0), c.getString(1), groupId, groupName))
+        }
         c.close()
         return list
     }
     fun getCategoryByName(name: String): CategoryDetail? {
-        val c = readableDatabase.rawQuery("SELECT id, name, variant_type FROM categories WHERE name=?", arrayOf(name))
+        val c = readableDatabase.rawQuery(
+            "SELECT c.id, c.name, c.variant_group_id, g.name FROM categories c LEFT JOIN variant_groups g ON c.variant_group_id = g.id WHERE c.name=?",
+            arrayOf(name)
+        )
         var result: CategoryDetail? = null
-        if (c.moveToFirst()) result = CategoryDetail(c.getLong(0), c.getString(1), c.getString(2) ?: "ram_storage")
+        if (c.moveToFirst()) {
+            val groupId = if (c.isNull(2)) null else c.getLong(2)
+            val groupName = if (c.isNull(3)) "No Variants" else c.getString(3)
+            result = CategoryDetail(c.getLong(0), c.getString(1), groupId, groupName)
+        }
         c.close()
         return result
     }
@@ -340,12 +407,18 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (b in getBrands()) brandsArr.put(b.text)
         root.put("brands", brandsArr)
 
+        val groupsArr = JSONArray()
+        for (g in getVariantGroups()) groupsArr.put(g.text)
+        root.put("variant_groups", groupsArr)
+
         val variantOptionsArr = JSONArray()
-        for (v in getVariantOptions()) {
-            val vo = JSONObject()
-            vo.put("name", v.text)
-            vo.put("type", v.type)
-            variantOptionsArr.put(vo)
+        for (g in getVariantGroups()) {
+            for (v in getVariantOptions(g.id)) {
+                val vo = JSONObject()
+                vo.put("name", v.text)
+                vo.put("type", g.text)
+                variantOptionsArr.put(vo)
+            }
         }
         root.put("variant_options", variantOptionsArr)
 
@@ -353,7 +426,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (c in getCategories()) {
             val co = JSONObject()
             co.put("name", c.name)
-            co.put("type", c.variantType)
+            co.put("type", if (c.variantGroupId == null) "" else c.variantGroupName)
             categoriesArr.put(co)
         }
         root.put("categories", categoriesArr)
@@ -451,12 +524,18 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (l in getLocations()) locationsArr.put(l.text)
         root.put("locations", locationsArr)
 
+        val groupsArr = JSONArray()
+        for (g in getVariantGroups()) groupsArr.put(g.text)
+        root.put("variant_groups", groupsArr)
+
         val variantOptionsArr = JSONArray()
-        for (v in getVariantOptions()) {
-            val vo = JSONObject()
-            vo.put("name", v.text)
-            vo.put("type", v.type)
-            variantOptionsArr.put(vo)
+        for (g in getVariantGroups()) {
+            for (v in getVariantOptions(g.id)) {
+                val vo = JSONObject()
+                vo.put("name", v.text)
+                vo.put("type", g.text)
+                variantOptionsArr.put(vo)
+            }
         }
         root.put("variant_options", variantOptionsArr)
 
@@ -464,7 +543,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         for (c in getCategories()) {
             val co = JSONObject()
             co.put("name", c.name)
-            co.put("type", c.variantType)
+            co.put("type", if (c.variantGroupId == null) "" else c.variantGroupName)
             categoriesArr.put(co)
         }
         root.put("categories", categoriesArr)
@@ -496,6 +575,16 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         return root
     }
 
+    private fun resolveGroupIdFromLegacyOrName(typeStr: String): Long? {
+        if (typeStr.isBlank() || typeStr == "none") return null
+        val mapped = when (typeStr) {
+            "ram_storage" -> "RAM + Storage"
+            "size" -> "Size"
+            else -> typeStr
+        }
+        return getOrCreateVariantGroupId(mapped)
+    }
+
     fun importFromJson(root: JSONObject, clearFirst: Boolean) {
         val db = writableDatabase
         db.beginTransaction()
@@ -510,6 +599,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 db.execSQL("DELETE FROM brands")
                 db.execSQL("DELETE FROM locations")
                 db.execSQL("DELETE FROM variant_options")
+                db.execSQL("DELETE FROM variant_groups")
                 db.execSQL("DELETE FROM categories")
             }
 
@@ -522,6 +612,12 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                     put("mobile", o.optString("mobile"))
                 }
                 db.insert("dealers", null, cv)
+            }
+
+            val groupsArr = root.optJSONArray("variant_groups") ?: JSONArray()
+            for (i in 0 until groupsArr.length()) {
+                val name = groupsArr.getString(i)
+                getOrCreateVariantGroupId(name)
             }
 
             val familiesArr = root.optJSONArray("families") ?: JSONArray()
@@ -580,15 +676,11 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             for (i in 0 until variantOptionsArr.length()) {
                 val vItem = variantOptionsArr.get(i)
                 if (vItem is JSONObject) {
+                    val typeStr = vItem.optString("type", "")
+                    val groupId = resolveGroupIdFromLegacyOrName(typeStr) ?: getOrCreateVariantGroupId("RAM + Storage")
                     val cv = ContentValues().apply {
+                        put("group_id", groupId)
                         put("name", vItem.optString("name"))
-                        put("option_type", vItem.optString("type", "ram_storage"))
-                    }
-                    db.insert("variant_options", null, cv)
-                } else {
-                    val cv = ContentValues().apply {
-                        put("name", vItem.toString())
-                        put("option_type", "ram_storage")
                     }
                     db.insert("variant_options", null, cv)
                 }
@@ -598,21 +690,22 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
             for (i in 0 until categoriesArr.length()) {
                 val cItem = categoriesArr.get(i)
                 val name: String
-                val type: String
+                val typeStr: String
                 if (cItem is JSONObject) {
                     name = cItem.optString("name")
-                    type = cItem.optString("type", "ram_storage")
+                    typeStr = cItem.optString("type", "")
                 } else {
                     name = cItem.toString()
-                    type = "ram_storage"
+                    typeStr = "ram_storage"
                 }
+                val groupId = resolveGroupIdFromLegacyOrName(typeStr)
                 val exists = db.rawQuery("SELECT id FROM categories WHERE name=?", arrayOf(name))
                 val already = exists.moveToFirst()
                 exists.close()
                 if (!already) {
                     val cv = ContentValues().apply {
                         put("name", name)
-                        put("variant_type", type)
+                        if (groupId != null) put("variant_group_id", groupId) else putNull("variant_group_id")
                     }
                     db.insert("categories", null, cv)
                 }
