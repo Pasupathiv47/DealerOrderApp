@@ -46,7 +46,7 @@ class BackupActivity : AppCompatActivity() {
             "orders" -> "dealer_orders_history_"
             else -> "dealer_orders_backup_"
         }
-        val fileName = prefix + DateFormat.format("yyyyMMdd_HHmm", Date()).toString() + ".json"
+        val fileName = prefix + DateFormat.format("yyyyMMdd_HHmm", Date()) + ".json"
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/json"
