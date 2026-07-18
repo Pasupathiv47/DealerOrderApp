@@ -17,6 +17,7 @@
         <activity android:name=".ItemsActivity" android:exported="false" />
         <activity android:name=".BrandsActivity" android:exported="false" />
         <activity android:name=".CategoriesActivity" android:exported="false" />
+        <activity android:name=".VariantGroupsActivity" android:exported="false" />
         <activity android:name=".VariantOptionsActivity" android:exported="false" />
         <activity android:name=".FamilyDetailActivity" android:exported="false" />
         <activity android:name=".OrdersActivity" android:exported="false" />
