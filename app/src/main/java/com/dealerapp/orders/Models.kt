@@ -6,8 +6,7 @@ data class VariantDetail(val id: Long, val text: String, val mop: Double, val dp
 data class OrderLine(val itemName: String, val variant: String, val color: String, val qty: Int, val dpPrice: Double = 0.0)
 data class OrderSummary(val id: Long, val dealerName: String, val date: String, val location: String = "", val mobile: String = "")
 data class RowData(val id: Long, val text: String)
-data class CategoryDetail(val id: Long, val name: String, val variantType: String)
-data class VariantOptionDetail(val id: Long, val text: String, val type: String)
+data class CategoryDetail(val id: Long, val name: String, val variantGroupId: Long?, val variantGroupName: String)
 
 sealed class GroupRow
 data class HeaderRow(val title: String) : GroupRow()
