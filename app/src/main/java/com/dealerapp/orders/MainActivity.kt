@@ -25,5 +25,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnBackup).setOnClickListener {
             startActivity(Intent(this, BackupActivity::class.java))
         }
+        findViewById<Button>(R.id.btnCloudSync).setOnClickListener {
+            startActivity(Intent(this, CloudSyncActivity::class.java))
+        }
     }
 }
