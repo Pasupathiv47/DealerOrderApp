@@ -149,10 +149,12 @@ class FamilyDetailActivity : AppCompatActivity() {
         val label = view.findViewById<TextView>(R.id.priceDialogLabel)
         val mopEt = view.findViewById<EditText>(R.id.mopInput)
         val dpEt = view.findViewById<EditText>(R.id.dpInput)
+        val stockEt = view.findViewById<EditText>(R.id.stockInput)
         label.text = "Set price for $variantText"
         if (existing != null) {
             mopEt.setText(if (existing.mop == 0.0) "" else existing.mop.toString())
             dpEt.setText(if (existing.dp == 0.0) "" else existing.dp.toString())
+            stockEt.setText(existing.stockQty.toString())
         }
 
         AlertDialog.Builder(this)
@@ -161,10 +163,11 @@ class FamilyDetailActivity : AppCompatActivity() {
             .setPositiveButton("Save") { _, _ ->
                 val mop = mopEt.text.toString().trim().toDoubleOrNull() ?: 0.0
                 val dp = dpEt.text.toString().trim().toDoubleOrNull() ?: 0.0
+                val stock = stockEt.text.toString().trim().toIntOrNull() ?: 0
                 if (existing == null) {
-                    db.addVariant(familyId, variantText, mop, dp)
+                    db.addVariant(familyId, variantText, mop, dp, stock)
                 } else {
-                    db.updateVariantPrice(existing.id, mop, dp)
+                    db.updateVariantPrice(existing.id, mop, dp, stock)
                 }
                 refresh()
             }
