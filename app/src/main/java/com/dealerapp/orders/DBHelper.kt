@@ -12,7 +12,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE dealers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, location TEXT, mobile TEXT)")
         db.execSQL("CREATE TABLE item_families (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, brand TEXT DEFAULT '')")
-        db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT, mop_price REAL DEFAULT 0, dp_price REAL DEFAULT 0)")
+        db.execSQL("CREATE TABLE family_variants (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, variant_text TEXT, mop_price REAL DEFAULT 0, dp_price REAL DEFAULT 0, stock_qty INTEGER DEFAULT 0)")
         db.execSQL("CREATE TABLE family_colors (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER, color_text TEXT)")
         db.execSQL("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, dealer_name TEXT, dealer_location TEXT, dealer_mobile TEXT, order_date TEXT)")
         db.execSQL("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, item_name TEXT, variant TEXT, color TEXT, qty INTEGER, dp_price REAL DEFAULT 0)")
@@ -57,6 +57,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         try { db.execSQL("ALTER TABLE item_families ADD COLUMN brand TEXT DEFAULT ''") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE family_variants ADD COLUMN mop_price REAL DEFAULT 0") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE family_variants ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
+        try { db.execSQL("ALTER TABLE family_variants ADD COLUMN stock_qty INTEGER DEFAULT 0") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE order_items ADD COLUMN dp_price REAL DEFAULT 0") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE categories ADD COLUMN variant_type TEXT") } catch (e: Exception) { }
         try { db.execSQL("ALTER TABLE variant_options ADD COLUMN option_type TEXT") } catch (e: Exception) { }
@@ -146,6 +147,13 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         c.close()
         return result
     }
+    fun getFamilyByName(name: String): ItemFamily? {
+        val c = readableDatabase.rawQuery("SELECT id, name, category, brand FROM item_families WHERE name=?", arrayOf(name))
+        var result: ItemFamily? = null
+        if (c.moveToFirst()) result = ItemFamily(c.getLong(0), c.getString(1), c.getString(2), c.getString(3) ?: "")
+        c.close()
+        return result
+    }
     fun updateFamilyBrand(id: Long, brand: String) {
         val cv = ContentValues().apply { put("brand", brand) }
         writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
@@ -155,24 +163,35 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         writableDatabase.update("item_families", cv, "id=?", arrayOf(id.toString()))
     }
 
-    fun addVariant(familyId: Long, text: String, mop: Double, dp: Double): Long {
+    fun addVariant(familyId: Long, text: String, mop: Double, dp: Double, stockQty: Int = 0): Long {
         val cv = ContentValues().apply {
             put("family_id", familyId); put("variant_text", text)
-            put("mop_price", mop); put("dp_price", dp)
+            put("mop_price", mop); put("dp_price", dp); put("stock_qty", stockQty)
         }
         return writableDatabase.insert("family_variants", null, cv)
     }
-    fun updateVariantPrice(id: Long, mop: Double, dp: Double) {
-        val cv = ContentValues().apply { put("mop_price", mop); put("dp_price", dp) }
+    fun updateVariantPrice(id: Long, mop: Double, dp: Double, stockQty: Int) {
+        val cv = ContentValues().apply { put("mop_price", mop); put("dp_price", dp); put("stock_qty", stockQty) }
+        writableDatabase.update("family_variants", cv, "id=?", arrayOf(id.toString()))
+    }
+    fun updateVariantStockAndPrice(id: Long, mop: Double, dp: Double, stockQty: Int) {
+        val cv = ContentValues().apply { put("mop_price", mop); put("dp_price", dp); put("stock_qty", stockQty) }
         writableDatabase.update("family_variants", cv, "id=?", arrayOf(id.toString()))
     }
     fun deleteVariant(id: Long) { writableDatabase.delete("family_variants", "id=?", arrayOf(id.toString())) }
     fun getVariantDetails(familyId: Long): List<VariantDetail> {
         val list = mutableListOf<VariantDetail>()
-        val c = readableDatabase.rawQuery("SELECT id, variant_text, mop_price, dp_price FROM family_variants WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
-        while (c.moveToNext()) list.add(VariantDetail(c.getLong(0), c.getString(1), c.getDouble(2), c.getDouble(3)))
+        val c = readableDatabase.rawQuery("SELECT id, variant_text, mop_price, dp_price, stock_qty FROM family_variants WHERE family_id=? ORDER BY id", arrayOf(familyId.toString()))
+        while (c.moveToNext()) list.add(VariantDetail(c.getLong(0), c.getString(1), c.getDouble(2), c.getDouble(3), c.getInt(4)))
         c.close()
         return list
+    }
+    fun getVariantByFamilyIdAndText(familyId: Long, text: String): VariantDetail? {
+        val c = readableDatabase.rawQuery("SELECT id, variant_text, mop_price, dp_price, stock_qty FROM family_variants WHERE family_id=? AND variant_text=?", arrayOf(familyId.toString(), text))
+        var result: VariantDetail? = null
+        if (c.moveToFirst()) result = VariantDetail(c.getLong(0), c.getString(1), c.getDouble(2), c.getDouble(3), c.getInt(4))
+        c.close()
+        return result
     }
 
     fun addColor(familyId: Long, text: String): Long {
@@ -393,6 +412,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 vo.put("text", v.text)
                 vo.put("mop", v.mop)
                 vo.put("dp", v.dp)
+                vo.put("stock", v.stockQty)
                 variantsArr.put(vo)
             }
             val colorsArr = JSONArray()
@@ -506,6 +526,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                 vo.put("text", v.text)
                 vo.put("mop", v.mop)
                 vo.put("dp", v.dp)
+                vo.put("stock", v.stockQty)
                 variantsArr.put(vo)
             }
             val colorsArr = JSONArray()
@@ -639,6 +660,7 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
                             put("variant_text", vItem.optString("text"))
                             put("mop_price", vItem.optDouble("mop", 0.0))
                             put("dp_price", vItem.optDouble("dp", 0.0))
+                            put("stock_qty", vItem.optInt("stock", 0))
                         }
                         db.insert("family_variants", null, vcv)
                     } else {
