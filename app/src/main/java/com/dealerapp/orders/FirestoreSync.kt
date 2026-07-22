@@ -40,26 +40,36 @@ object FirestoreSync {
         db.collection("variants").get()
             .addOnSuccessListener { snapshot ->
                 var updated = 0
+                var created = 0
                 for (doc in snapshot.documents) {
                     val familyName = doc.getString("family") ?: continue
                     val variantText = doc.getString("variant") ?: continue
-                    val mop = doc.getDouble("mop")
-                    val dp = doc.getDouble("dp")
-                    val stock = doc.getLong("stockQty")
+                    val brand = doc.getString("brand") ?: ""
+                    val category = doc.getString("category") ?: ""
+                    val mop = doc.getDouble("mop") ?: 0.0
+                    val dp = doc.getDouble("dp") ?: 0.0
+                    val stock = (doc.getLong("stockQty") ?: 0L).toInt()
 
-                    if (mop == null && dp == null && stock == null) continue
+                    var family = dbHelper.getFamilyByName(familyName)
+                    if (family == null) {
+                        dbHelper.ensureCategoryExists(category)
+                        dbHelper.ensureBrandExists(brand)
+                        val newId = dbHelper.addFamilyFromCloud(familyName, category, brand)
+                        family = dbHelper.getFamily(newId)
+                        created++
+                    }
+                    if (family == null) continue
 
-                    val family = dbHelper.getFamilyByName(familyName) ?: continue
-                    val existing = dbHelper.getVariantByFamilyIdAndText(family.id, variantText) ?: continue
-
-                    val newMop = mop ?: existing.mop
-                    val newDp = dp ?: existing.dp
-                    val newStock = stock?.toInt() ?: existing.stockQty
-
-                    dbHelper.updateVariantStockAndPrice(existing.id, newMop, newDp, newStock)
+                    val existingVariant = dbHelper.getVariantByFamilyIdAndText(family.id, variantText)
+                    if (existingVariant == null) {
+                        dbHelper.addVariant(family.id, variantText, mop, dp, stock)
+                    } else {
+                        dbHelper.updateVariantStockAndPrice(existingVariant.id, mop, dp, stock)
+                    }
                     updated++
                 }
-                onDone(true, "Updated $updated item(s) from cloud")
+                val msg = if (created > 0) "Updated $updated item(s), $created new" else "Updated $updated item(s)"
+                onDone(true, msg)
             }
             .addOnFailureListener { e -> onDone(false, "Pull failed: ${e.message}") }
     }
