@@ -127,6 +127,21 @@ class DBHelper(context: Context) : SQLiteOpenHelper(context, "dealer_orders.db",
         }
         return familyId
     }
+    fun addFamilyFromCloud(name: String, category: String, brand: String): Long {
+        val cv = ContentValues().apply { put("name", name); put("category", category); put("brand", brand) }
+        val familyId = writableDatabase.insert("item_families", null, cv)
+        addColor(familyId, "Any Colour")
+        return familyId
+    }
+    fun ensureCategoryExists(name: String) {
+        if (name.isBlank()) return
+        if (getCategoryByName(name) == null) addCategory(name, null)
+    }
+    fun ensureBrandExists(name: String) {
+        if (name.isBlank()) return
+        val existing = getBrands().any { it.text == name }
+        if (!existing) addBrand(name)
+    }
     fun deleteFamily(id: Long) {
         val db = writableDatabase
         db.delete("family_variants", "family_id=?", arrayOf(id.toString()))
