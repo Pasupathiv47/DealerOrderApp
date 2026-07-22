@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dealer Orders - Price & Stock Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #f4f4f4; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #666; margin-bottom: 16px; font-size: 14px; }
+  #loginBox { max-width: 320px; margin: 80px auto; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  #loginBox input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; font-size: 16px; }
+  #loginBox button { width: 100%; padding: 10px; background: #222; color: white; border: none; border-radius: 4px; font-size: 16px; }
+  #dashboard { display: none; }
+  .controls { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .controls input, .controls select { padding: 8px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+  th { background: #222; color: white; position: sticky; top: 0; }
+  input.editField { width: 80px; padding: 4px; font-size: 13px; }
+  .rowSaveBtn { padding: 6px 10px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .outOfStock { background: #ffe6e6; }
+  #saveAllBtn { padding: 10px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; font-size: 14px; margin-bottom: 12px; cursor: pointer; }
+  #statusMsg { margin: 8px 0; font-size: 14px; color: #2e7d32; }
+</style>
+</head>
+<body>
+
+<div id="loginBox">
+  <h1>Dealer Orders</h1>
+  <p class="sub">Enter the office password to manage prices and stock.</p>
+  <input type="password" id="passwordInput" placeholder="Password">
+  <button onclick="tryLogin()">Enter</button>
+</div>
+
+<div id="dashboard">
+  <h1>Price & Stock Dashboard</h1>
+  <p class="sub">Update MOP, DP and Stock for each item. Changes save directly to the app.</p>
+  <div class="controls">
+    <input type="text" id="searchBox" placeholder="Search item or brand..." oninput="renderTable()">
+    <select id="brandFilter" onchange="renderTable()"><option value="">All Brands</option></select>
+  </div>
+  <button id="saveAllBtn" onclick="saveAll()">Save All Changes</button>
+  <div id="statusMsg"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Family</th>
+        <th>Brand</th>
+        <th>Category</th>
+        <th>Variant</th>
+        <th>MOP</th>
+        <th>DP</th>
+        <th>Stock</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCN-FFDrfh05JIPjypt8g2sb7y1kED287k",
+    authDomain: "dealerorderapp.firebaseapp.com",
+    projectId: "dealerorderapp",
+    storageBucket: "dealerorderapp.firebasestorage.app",
+    messagingSenderId: "175969467669",
+    appId: "1:175969467669:web:4dd7c00ec7060661eabd1c"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const DASHBOARD_PASSWORD = "C37eofd69#";
+
+  function tryLogin() {
+    const val = document.getElementById('passwordInput').value;
+    if (val === DASHBOARD_PASSWORD) {
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      loadData();
+    } else {
+      alert('Wrong password');
+    }
+  }
+
+  let allDocs = [];
+  const pendingChanges = {};
+
+  function loadData() {
+    document.getElementById('statusMsg').textContent = 'Loading...';
+    db.collection('variants').get().then(snapshot => {
+      allDocs = [];
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        allDocs.push({
+          id: doc.id,
+          family: d.family || '',
+          brand: d.brand || '',
+          category: d.category || '',
+          variant: d.variant || '',
+          mop: d.mop || 0,
+          dp: d.dp || 0,
+          stockQty: d.stockQty || 0
+        });
+      });
+      allDocs.sort((a, b) => (a.brand + a.family + a.variant).localeCompare(b.brand + b.family + b.variant));
+      populateBrandFilter();
+      renderTable();
+      document.getElementById('statusMsg').textContent = `Loaded ${allDocs.length} item(s).`;
+    }).catch(err => {
+      document.getElementById('statusMsg').textContent = 'Error loading: ' + err.message;
+    });
+  }
+
+  function populateBrandFilter() {
+    const select = document.getElementById('brandFilter');
+    const brands = [...new Set(allDocs.map(d => d.brand))].filter(b => b).sort();
+    select.innerHTML = '<option value="">All Brands</option>';
+    brands.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b;
+      opt.textContent = b;
+      select.appendChild(opt);
+    });
+  }
+
+  function renderTable() {
+    const search = document.getElementById('searchBox').value.toLowerCase();
+    const brandFilter = document.getElementById('brandFilter').value;
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+
+    const filtered = allDocs.filter(d => {
+      const matchesSearch = !search || (d.family + ' ' + d.brand + ' ' + d.variant).toLowerCase().includes(search);
+      const matchesBrand = !brandFilter || d.brand === brandFilter;
+      return matchesSearch && matchesBrand;
+    });
+
+    filtered.forEach(d => {
+      const tr = document.createElement('tr');
+      if (d.stockQty <= 0) tr.className = 'outOfStock';
+      tr.innerHTML = `
+        <td>${d.family}</td>
+        <td>${d.brand}</td>
+        <td>${d.category}</td>
+        <td>${d.variant}</td>
+        <td><input class="editField" type="number" value="${d.mop}" data-id="${d.id}" data-field="mop"></td>
+        <td><input class="editField" type="number" value="${d.dp}" data-id="${d.id}" data-field="dp"></td>
+        <td><input class="editField" type="number" value="${d.stockQty}" data-id="${d.id}" data-field="stockQty"></td>
+        <td><button class="rowSaveBtn" onclick="saveRow('${d.id}')">Save</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.editField').forEach(input => {
+      input.addEventListener('change', e => {
+        const id = e.target.dataset.id;
+        const field = e.target.dataset.field;
+        if (!pendingChanges[id]) pendingChanges[id] = {};
+        pendingChanges[id][field] = parseFloat(e.target.value) || 0;
+      });
+    });
+  }
+
+  function saveRow(id) {
+    const row = [...document.querySelectorAll(`input[data-id="${id}"]`)];
+    const data = {};
+    row.forEach(input => {
+      data[input.dataset.field] = parseFloat(input.value) || 0;
+    });
+    data.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+    db.collection('variants').doc(id).update(data).then(() => {
+      document.getElementById('statusMsg').textContent = 'Saved.';
+      delete pendingChanges[id];
+    }).catch(err => {
+      document.getElementById('statusMsg').textContent = 'Save failed: ' + err.message;
+    });
+  }
+
+  function saveAll() {
+    const ids = Object.keys(pendingChanges);
+    if (ids.length === 0) {
+      document.getElementById('statusMsg').textContent = 'No changes to save.';
+      return;
+    }
+    document.getElementById('statusMsg').textContent = `Saving ${ids.length} change(s)...`;
+    const batch = db.batch();
+    ids.forEach(id => {
+      const ref = db.collection('variants').doc(id);
+      const data = { ...pendingChanges[id], lastUpdated: firebase.firestore.FieldValue.serverTimestamp() };
+      batch.update(ref, data);
+    });
+    batch.commit().then(() => {
+      document.getElementById('statusMsg').textContent = `Saved ${ids.length} change(s).`;
+      Object.keys(pendingChanges).forEach(k => delete pendingChanges[k]);
+    }).catch(err => {
+      document.getElementById('statusMsg').textContent = 'Save failed: ' + err.message;
+    });
+  }
+</script>
+</body>
+</html>
