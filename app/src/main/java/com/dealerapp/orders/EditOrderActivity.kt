@@ -67,7 +67,6 @@ class EditOrderActivity : AppCompatActivity() {
         val priceInfo = view.findViewById<TextView>(R.id.linePriceInfo)
         val colorSpinner = view.findViewById<Spinner>(R.id.lineColorSpinner)
         val qtyEt = view.findViewById<EditText>(R.id.lineQty)
-        val addedCountText = view.findViewById<TextView>(R.id.lineAddedCount)
 
         val categoryOptions = listOf("All Categories") + families.map { if (it.category.isBlank()) "No Category" else it.category }.distinct().sorted()
         categorySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categoryOptions)
@@ -75,7 +74,6 @@ class EditOrderActivity : AppCompatActivity() {
         var categoryFiltered: List<ItemFamily> = families
         var filteredFamilies: List<ItemFamily> = families
         var currentVariantDetails: List<VariantDetail> = emptyList()
-        var addedInThisSession = 0
 
         fun updatePriceInfo(pos: Int) {
             if (currentVariantDetails.isEmpty() || pos < 0 || pos >= currentVariantDetails.size) {
@@ -83,7 +81,8 @@ class EditOrderActivity : AppCompatActivity() {
                 return
             }
             val v = currentVariantDetails[pos]
-            priceInfo.text = "MOP: ₹${"%.2f".format(v.mop)}   DP: ₹${"%.2f".format(v.dp)}"
+            val stockLabel = if (v.stockQty <= 0) "OUT OF STOCK" else "Stock: ${v.stockQty}"
+            priceInfo.text = "MOP: ₹${"%.2f".format(v.mop)}   DP: ₹${"%.2f".format(v.dp)}   $stockLabel"
         }
 
         fun updateVariantColor(pos: Int) {
@@ -148,6 +147,21 @@ class EditOrderActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
+        fun addCurrentSelection() {
+            if (filteredFamilies.isEmpty()) {
+                Toast.makeText(this, "No items match this filter", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val itemName = familySpinner.selectedItem?.toString() ?: return
+            val variant = variantSpinner.selectedItem?.toString() ?: "-"
+            val color = colorSpinner.selectedItem?.toString() ?: "-"
+            val qty = qtyEt.text.toString().trim().toIntOrNull() ?: 1
+            val variantPos = variantSpinner.selectedItemPosition
+            val dpPrice = if (variantPos >= 0 && variantPos < currentVariantDetails.size) currentVariantDetails[variantPos].dp else 0.0
+            orderLines.add(OrderLine(itemName, variant, color, qty, dpPrice))
+            refreshLines()
+        }
+
         val dialog = AlertDialog.Builder(this)
             .setTitle("Add Item to Order")
             .setView(view)
@@ -157,21 +171,18 @@ class EditOrderActivity : AppCompatActivity() {
 
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (filteredFamilies.isEmpty()) {
-                    Toast.makeText(this, "No items match this filter", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                val itemName = familySpinner.selectedItem?.toString() ?: return@setOnClickListener
-                val variant = variantSpinner.selectedItem?.toString() ?: "-"
-                val color = colorSpinner.selectedItem?.toString() ?: "-"
-                val qty = qtyEt.text.toString().trim().toIntOrNull() ?: 1
                 val variantPos = variantSpinner.selectedItemPosition
-                val dpPrice = if (variantPos >= 0 && variantPos < currentVariantDetails.size) currentVariantDetails[variantPos].dp else 0.0
-                orderLines.add(OrderLine(itemName, variant, color, qty, dpPrice))
-                refreshLines()
-                addedInThisSession++
-                addedCountText.text = "$addedInThisSession item(s) added so far. Change selections and tap Add for more, or tap Done to finish."
-                Toast.makeText(this, "Added: $itemName - $variant", Toast.LENGTH_SHORT).show()
+                val stock = if (variantPos >= 0 && variantPos < currentVariantDetails.size) currentVariantDetails[variantPos].stockQty else 0
+                if (stock <= 0) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Out of Stock")
+                        .setMessage("This item shows 0 stock as of the last cloud sync. Add it anyway?")
+                        .setPositiveButton("Add Anyway") { _, _ -> addCurrentSelection() }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    addCurrentSelection()
+                }
             }
         }
 
