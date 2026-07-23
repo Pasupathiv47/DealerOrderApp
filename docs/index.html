@@ -29,11 +29,14 @@
   .box input, .box textarea { width: 100%; padding: 8px; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; font-family: inherit; }
   .box .row2 { display: flex; gap: 8px; }
   .box .row2 input { flex: 1; }
-  .box button { padding: 10px 16px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  .box button { padding: 10px 16px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; margin-top: 4px; }
   .box button.secondary { background: #1565c0; }
   .box textarea { min-height: 120px; }
-  details summary { cursor: pointer; font-weight: bold; margin-bottom: 8px; }
+  details.box summary { cursor: pointer; font-weight: bold; margin-bottom: 8px; font-size: 15px; }
   .hint { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .previewTable { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+  .previewTable th, .previewTable td { border: 1px solid #ddd; padding: 4px 6px; }
+  .previewTable th { background: #eee; }
 </style>
 </head>
 <body>
@@ -47,20 +50,25 @@
 
 <div id="dashboard">
   <h1>Price & Stock Dashboard</h1>
-  <p class="sub">Update prices/stock one by one below, or use Bulk Update for many items at once.</p>
+  <p class="sub">Update prices/stock one by one below, or use a Bulk Update section for many items at once.</p>
 
   <details class="box">
-    <summary>Bulk Update (Paste from Excel/Sheets or Upload CSV)</summary>
-    <p class="hint">Each row needs: Family, Brand, Category, Variant, MOP, DP, Stock — in that order. Existing items (matching Family+Variant) get updated; new ones get created automatically.</p>
+    <summary>Bulk Update: Paste Billing Software Stock Report</summary>
+    <p class="hint">Copy rows directly from your billing software's Excel export (like Stock_report.xlsx) — including all columns, starting from the first data row (skip the header rows). Paste them below. This reads the Item name, Closing Stock Quantity, and Rate/Unit columns automatically, and matches colour variants of the same item together.</p>
+    <textarea id="billingPasteArea" placeholder="1	363	MI 18W DUAL PORT CHARGER (XIAOMI)	INFO	...	101	...	280	..."></textarea>
+    <button onclick="previewBillingData()">Preview</button>
+    <div id="billingPreviewArea"></div>
+  </details>
 
+  <details class="box">
+    <summary>Bulk Update: Simple Format (Paste or CSV)</summary>
+    <p class="hint">Each row needs: Family, Brand, Category, Variant, MOP, DP, Stock — in that order.</p>
     <button class="secondary" onclick="downloadTemplate()">Download Current Data as Template</button>
     <br><br>
-
-    <p class="hint">Option A — Paste rows copied from a spreadsheet (tab or comma separated), one item per line:</p>
+    <p class="hint">Paste rows (tab or comma separated), one item per line:</p>
     <textarea id="pasteArea" placeholder="Redmi Note 15 5G	Xiaomi	Smartphones	8GB+128GB	26999	25649	10"></textarea>
     <button onclick="processPastedData()">Process Pasted Data</button>
-
-    <p class="hint" style="margin-top:16px;">Option B — Upload a CSV file:</p>
+    <p class="hint" style="margin-top:16px;">Or upload a CSV file:</p>
     <input type="file" id="csvFileInput" accept=".csv,text/csv">
     <button onclick="processCsvFile()">Upload CSV</button>
   </details>
@@ -131,11 +139,18 @@
   }
 
   function sanitize(s) {
-    return (s || '').replace(/[^A-Za-z0-9]/g, '_');
+    return (s || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
   }
 
   function setStatus(msg) {
     document.getElementById('statusMsg').textContent = msg;
+  }
+
+  function toTitleCase(s) {
+    if (!s) return s;
+    return s.toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .replace(/(\d)g\b/gi, '$1G');
   }
 
   // ---------- Single Add ----------
@@ -159,7 +174,7 @@
     db.collection('variants').doc(docId).set({
       family, brand, category, variant, mop, dp, stockQty,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
+    }, { merge: true }).then(() => {
       setStatus(`Added "${family} - ${variant}".`);
       document.getElementById('newFamily').value = '';
       document.getElementById('newBrand').value = '';
@@ -174,7 +189,7 @@
     });
   }
 
-  // ---------- Bulk Update ----------
+  // ---------- Simple Bulk Update ----------
   function parseDelimitedText(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const rows = [];
@@ -184,7 +199,7 @@
       if (parts.length < 7) continue;
       const [family, brand, category, variant, mop, dp, stock] = parts;
       if (!family || !variant) continue;
-      if (family.toLowerCase() === 'family') continue; // skip header row
+      if (family.toLowerCase() === 'family') continue;
       rows.push({
         family, brand, category, variant,
         mop: parseFloat(mop) || 0,
@@ -215,11 +230,16 @@
       chunk.forEach(r => {
         const docId = sanitize(r.family) + '__' + sanitize(r.variant);
         const ref = db.collection('variants').doc(docId);
-        batch.set(ref, {
-          family: r.family, brand: r.brand, category: r.category, variant: r.variant,
-          mop: r.mop, dp: r.dp, stockQty: r.stockQty,
+        const data = {
+          family: r.family, variant: r.variant,
           lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+        if (r.brand !== undefined) data.brand = r.brand;
+        if (r.category !== undefined) data.category = r.category;
+        if (r.mop !== undefined) data.mop = r.mop;
+        if (r.dp !== undefined) data.dp = r.dp;
+        if (r.stockQty !== undefined) data.stockQty = r.stockQty;
+        batch.set(ref, data, { merge: true });
       });
       batch.commit().then(() => {
         index += chunkSize;
@@ -233,8 +253,7 @@
   }
 
   function processPastedData() {
-    const text = document.getElementById('pasteArea').value;
-    const rows = parseDelimitedText(text);
+    const rows = parseDelimitedText(document.getElementById('pasteArea').value);
     bulkWriteRows(rows);
   }
 
@@ -244,13 +263,9 @@
       alert('Choose a CSV file first.');
       return;
     }
-    const file = fileInput.files[0];
     const reader = new FileReader();
-    reader.onload = function(e) {
-      const rows = parseDelimitedText(e.target.result);
-      bulkWriteRows(rows);
-    };
-    reader.readAsText(file);
+    reader.onload = e => bulkWriteRows(parseDelimitedText(e.target.result));
+    reader.readAsText(fileInput.files[0]);
   }
 
   function downloadTemplate() {
@@ -269,7 +284,82 @@
     URL.revokeObjectURL(url);
   }
 
-  // ---------- Existing table (single edits) ----------
+  // ---------- Billing Software Report Parser ----------
+  function parseBillingItemName(raw) {
+    let name = raw.trim();
+    let brand = '';
+    const brandMatch = name.match(/\(([^)]+)\)\s*$/);
+    if (brandMatch) {
+      brand = toTitleCase(brandMatch[1].trim());
+      name = name.slice(0, brandMatch.index).trim();
+    }
+    const variantMatch = name.match(/(\d+)\s*\/\s*(\d+)\s*GB?/i);
+    let variant = 'Standard';
+    let family = name;
+    if (variantMatch) {
+      variant = `${variantMatch[1]}GB+${variantMatch[2]}GB`;
+      family = name.slice(0, variantMatch.index).trim();
+    }
+    family = toTitleCase(family);
+    return { family, brand, variant };
+  }
+
+  let billingPreviewRows = [];
+
+  function previewBillingData() {
+    const text = document.getElementById('billingPasteArea').value;
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const grouped = {};
+
+    lines.forEach(line => {
+      const cols = line.split('\t');
+      if (cols.length < 14) return;
+      const itemName = (cols[2] || '').trim();
+      if (!itemName || itemName.toLowerCase() === 'item') return;
+      const qtyRaw = cols[9];
+      const rateRaw = cols[13];
+      const qty = parseInt(qtyRaw) || 0;
+      const rate = parseFloat(rateRaw) || 0;
+      if (qty <= 0 && rate <= 0) return;
+
+      const parsed = parseBillingItemName(itemName);
+      const key = sanitize(parsed.family) + '__' + sanitize(parsed.variant);
+
+      if (!grouped[key]) {
+        grouped[key] = { family: parsed.family, brand: parsed.brand, variant: parsed.variant, stockQty: 0, dp: rate };
+      }
+      grouped[key].stockQty += qty;
+      if (rate > 0) grouped[key].dp = rate;
+    });
+
+    billingPreviewRows = Object.values(grouped);
+
+    const previewDiv = document.getElementById('billingPreviewArea');
+    if (billingPreviewRows.length === 0) {
+      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header.</p>';
+      return;
+    }
+
+    let html = `<p class="hint">${billingPreviewRows.length} item(s) detected (colours combined into total stock per variant). Review below, then confirm.</p>`;
+    html += '<table class="previewTable"><tr><th>Family</th><th>Brand</th><th>Variant</th><th>Stock</th><th>Rate (DP)</th></tr>';
+    billingPreviewRows.forEach(r => {
+      html += `<tr><td>${r.family}</td><td>${r.brand}</td><td>${r.variant}</td><td>${r.stockQty}</td><td>${r.dp}</td></tr>`;
+    });
+    html += '</table>';
+    html += '<button onclick="confirmBillingImport()">Confirm & Update Cloud</button>';
+    previewDiv.innerHTML = html;
+  }
+
+  function confirmBillingImport() {
+    const rows = billingPreviewRows.map(r => ({
+      family: r.family, brand: r.brand, variant: r.variant, dp: r.dp, stockQty: r.stockQty
+    }));
+    bulkWriteRows(rows);
+    document.getElementById('billingPreviewArea').innerHTML = '';
+    document.getElementById('billingPasteArea').value = '';
+  }
+
+  // ---------- Existing table ----------
   let allDocs = [];
   const pendingChanges = {};
 
