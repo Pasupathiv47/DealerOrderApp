@@ -6,7 +6,7 @@ import com.google.firebase.firestore.SetOptions
 object FirestoreSync {
     private val db by lazy { FirebaseFirestore.getInstance() }
 
-    private fun sanitize(s: String): String = s.replace(Regex("[^A-Za-z0-9]"), "_")
+    private fun sanitize(s: String): String = s.lowercase().trim().replace(Regex("[^a-z0-9]"), "_")
 
     fun pushCatalog(dbHelper: DBHelper, onDone: (Boolean, String) -> Unit) {
         val families = dbHelper.getFamilies()
@@ -64,7 +64,8 @@ object FirestoreSync {
                     if (existingVariant == null) {
                         dbHelper.addVariant(family.id, variantText, mop, dp, stock)
                     } else {
-                        dbHelper.updateVariantStockAndPrice(existingVariant.id, mop, dp, stock)
+                        val keepMop = if (mop > 0.0) mop else existingVariant.mop
+                        dbHelper.updateVariantStockAndPrice(existingVariant.id, keepMop, dp, stock)
                     }
                     updated++
                 }
