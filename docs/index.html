@@ -24,12 +24,16 @@
   .rowSaveBtn { padding: 6px 10px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
   .outOfStock { background: #ffe6e6; }
   #saveAllBtn { padding: 10px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; font-size: 14px; margin-bottom: 12px; cursor: pointer; }
-  #statusMsg { margin: 8px 0; font-size: 14px; color: #2e7d32; }
-  #addItemBox { background: white; padding: 16px; border-radius: 6px; margin-bottom: 20px; }
-  #addItemBox input { width: 100%; padding: 8px; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; }
-  #addItemBox .row2 { display: flex; gap: 8px; }
-  #addItemBox .row2 input { flex: 1; }
-  #addItemBtn { padding: 10px 16px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; width: 100%; }
+  #statusMsg { margin: 8px 0; font-size: 14px; color: #2e7d32; white-space: pre-line; }
+  .box { background: white; padding: 16px; border-radius: 6px; margin-bottom: 20px; }
+  .box input, .box textarea { width: 100%; padding: 8px; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; font-family: inherit; }
+  .box .row2 { display: flex; gap: 8px; }
+  .box .row2 input { flex: 1; }
+  .box button { padding: 10px 16px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  .box button.secondary { background: #1565c0; }
+  .box textarea { min-height: 120px; }
+  details summary { cursor: pointer; font-weight: bold; margin-bottom: 8px; }
+  .hint { font-size: 12px; color: #888; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -43,10 +47,26 @@
 
 <div id="dashboard">
   <h1>Price & Stock Dashboard</h1>
-  <p class="sub">Update MOP, DP and Stock for each item, or add a brand-new item below. Changes sync to the app.</p>
+  <p class="sub">Update prices/stock one by one below, or use Bulk Update for many items at once.</p>
 
-  <div id="addItemBox">
-    <h2>Add New Item</h2>
+  <details class="box">
+    <summary>Bulk Update (Paste from Excel/Sheets or Upload CSV)</summary>
+    <p class="hint">Each row needs: Family, Brand, Category, Variant, MOP, DP, Stock — in that order. Existing items (matching Family+Variant) get updated; new ones get created automatically.</p>
+
+    <button class="secondary" onclick="downloadTemplate()">Download Current Data as Template</button>
+    <br><br>
+
+    <p class="hint">Option A — Paste rows copied from a spreadsheet (tab or comma separated), one item per line:</p>
+    <textarea id="pasteArea" placeholder="Redmi Note 15 5G	Xiaomi	Smartphones	8GB+128GB	26999	25649	10"></textarea>
+    <button onclick="processPastedData()">Process Pasted Data</button>
+
+    <p class="hint" style="margin-top:16px;">Option B — Upload a CSV file:</p>
+    <input type="file" id="csvFileInput" accept=".csv,text/csv">
+    <button onclick="processCsvFile()">Upload CSV</button>
+  </details>
+
+  <div class="box">
+    <h2>Add Single New Item</h2>
     <input type="text" id="newFamily" placeholder="Item / Family name (e.g. Redmi Note 15 5G)">
     <div class="row2">
       <input type="text" id="newBrand" placeholder="Brand (e.g. Xiaomi)">
@@ -58,7 +78,7 @@
       <input type="number" id="newDp" placeholder="DP Price">
       <input type="number" id="newStock" placeholder="Stock Qty">
     </div>
-    <button id="addItemBtn" onclick="addNewItem()">Add Item</button>
+    <button onclick="addNewItem()">Add Item</button>
   </div>
 
   <h2>Existing Items</h2>
@@ -111,9 +131,14 @@
   }
 
   function sanitize(s) {
-    return s.replace(/[^A-Za-z0-9]/g, '_');
+    return (s || '').replace(/[^A-Za-z0-9]/g, '_');
   }
 
+  function setStatus(msg) {
+    document.getElementById('statusMsg').textContent = msg;
+  }
+
+  // ---------- Single Add ----------
   function addNewItem() {
     const family = document.getElementById('newFamily').value.trim();
     const brand = document.getElementById('newBrand').value.trim();
@@ -129,13 +154,13 @@
     }
 
     const docId = sanitize(family) + '__' + sanitize(variant);
-    document.getElementById('statusMsg').textContent = 'Adding item...';
+    setStatus('Adding item...');
 
     db.collection('variants').doc(docId).set({
       family, brand, category, variant, mop, dp, stockQty,
       lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
     }).then(() => {
-      document.getElementById('statusMsg').textContent = `Added "${family} - ${variant}". It will appear in the app after the next Cloud Sync pull.`;
+      setStatus(`Added "${family} - ${variant}".`);
       document.getElementById('newFamily').value = '';
       document.getElementById('newBrand').value = '';
       document.getElementById('newCategory').value = '';
@@ -145,15 +170,111 @@
       document.getElementById('newStock').value = '';
       loadData();
     }).catch(err => {
-      document.getElementById('statusMsg').textContent = 'Add failed: ' + err.message;
+      setStatus('Add failed: ' + err.message);
     });
   }
 
+  // ---------- Bulk Update ----------
+  function parseDelimitedText(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const rows = [];
+    for (const line of lines) {
+      const delimiter = line.includes('\t') ? '\t' : ',';
+      const parts = line.split(delimiter).map(p => p.trim());
+      if (parts.length < 7) continue;
+      const [family, brand, category, variant, mop, dp, stock] = parts;
+      if (!family || !variant) continue;
+      if (family.toLowerCase() === 'family') continue; // skip header row
+      rows.push({
+        family, brand, category, variant,
+        mop: parseFloat(mop) || 0,
+        dp: parseFloat(dp) || 0,
+        stockQty: parseInt(stock) || 0
+      });
+    }
+    return rows;
+  }
+
+  function bulkWriteRows(rows) {
+    if (rows.length === 0) {
+      setStatus('No valid rows found. Check the format and try again.');
+      return;
+    }
+    setStatus(`Writing ${rows.length} item(s)...`);
+    const chunkSize = 400;
+    let index = 0;
+
+    function writeChunk() {
+      const chunk = rows.slice(index, index + chunkSize);
+      if (chunk.length === 0) {
+        setStatus(`Done. Updated/added ${rows.length} item(s).`);
+        loadData();
+        return;
+      }
+      const batch = db.batch();
+      chunk.forEach(r => {
+        const docId = sanitize(r.family) + '__' + sanitize(r.variant);
+        const ref = db.collection('variants').doc(docId);
+        batch.set(ref, {
+          family: r.family, brand: r.brand, category: r.category, variant: r.variant,
+          mop: r.mop, dp: r.dp, stockQty: r.stockQty,
+          lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      batch.commit().then(() => {
+        index += chunkSize;
+        setStatus(`Writing... ${Math.min(index, rows.length)}/${rows.length}`);
+        writeChunk();
+      }).catch(err => {
+        setStatus('Bulk write failed: ' + err.message);
+      });
+    }
+    writeChunk();
+  }
+
+  function processPastedData() {
+    const text = document.getElementById('pasteArea').value;
+    const rows = parseDelimitedText(text);
+    bulkWriteRows(rows);
+  }
+
+  function processCsvFile() {
+    const fileInput = document.getElementById('csvFileInput');
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alert('Choose a CSV file first.');
+      return;
+    }
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const rows = parseDelimitedText(e.target.result);
+      bulkWriteRows(rows);
+    };
+    reader.readAsText(file);
+  }
+
+  function downloadTemplate() {
+    let csv = 'family,brand,category,variant,mop,dp,stock\n';
+    allDocs.forEach(d => {
+      csv += `${d.family},${d.brand},${d.category},${d.variant},${d.mop},${d.dp},${d.stockQty}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dealer_orders_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------- Existing table (single edits) ----------
   let allDocs = [];
   const pendingChanges = {};
 
   function loadData() {
-    document.getElementById('statusMsg').textContent = 'Loading...';
+    setStatus('Loading...');
     db.collection('variants').get().then(snapshot => {
       allDocs = [];
       snapshot.forEach(doc => {
@@ -172,9 +293,9 @@
       allDocs.sort((a, b) => (a.brand + a.family + a.variant).localeCompare(b.brand + b.family + b.variant));
       populateBrandFilter();
       renderTable();
-      document.getElementById('statusMsg').textContent = `Loaded ${allDocs.length} item(s).`;
+      setStatus(`Loaded ${allDocs.length} item(s).`);
     }).catch(err => {
-      document.getElementById('statusMsg').textContent = 'Error loading: ' + err.message;
+      setStatus('Error loading: ' + err.message);
     });
   }
 
@@ -236,20 +357,20 @@
     });
     data.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
     db.collection('variants').doc(id).update(data).then(() => {
-      document.getElementById('statusMsg').textContent = 'Saved.';
+      setStatus('Saved.');
       delete pendingChanges[id];
     }).catch(err => {
-      document.getElementById('statusMsg').textContent = 'Save failed: ' + err.message;
+      setStatus('Save failed: ' + err.message);
     });
   }
 
   function saveAll() {
     const ids = Object.keys(pendingChanges);
     if (ids.length === 0) {
-      document.getElementById('statusMsg').textContent = 'No changes to save.';
+      setStatus('No changes to save.');
       return;
     }
-    document.getElementById('statusMsg').textContent = `Saving ${ids.length} change(s)...`;
+    setStatus(`Saving ${ids.length} change(s)...`);
     const batch = db.batch();
     ids.forEach(id => {
       const ref = db.collection('variants').doc(id);
@@ -257,10 +378,10 @@
       batch.update(ref, data);
     });
     batch.commit().then(() => {
-      document.getElementById('statusMsg').textContent = `Saved ${ids.length} change(s).`;
+      setStatus(`Saved ${ids.length} change(s).`);
       Object.keys(pendingChanges).forEach(k => delete pendingChanges[k]);
     }).catch(err => {
-      document.getElementById('statusMsg').textContent = 'Save failed: ' + err.message;
+      setStatus('Save failed: ' + err.message);
     });
   }
 </script>
