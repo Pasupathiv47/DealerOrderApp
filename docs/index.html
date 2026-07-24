@@ -22,21 +22,26 @@
   th { background: #222; color: white; position: sticky; top: 0; }
   input.editField { width: 80px; padding: 4px; font-size: 13px; }
   .rowSaveBtn { padding: 6px 10px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .rowDeleteBtn { padding: 6px 10px; background: #c62828; color: white; border: none; border-radius: 4px; cursor: pointer; }
   .outOfStock { background: #ffe6e6; }
   #saveAllBtn { padding: 10px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; font-size: 14px; margin-bottom: 12px; cursor: pointer; }
   #statusMsg { margin: 8px 0; font-size: 14px; color: #2e7d32; white-space: pre-line; }
   .box { background: white; padding: 16px; border-radius: 6px; margin-bottom: 20px; }
-  .box input, .box textarea { width: 100%; padding: 8px; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; font-family: inherit; }
+  .box input, .box textarea, .box select { width: 100%; padding: 8px; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; font-family: inherit; }
   .box .row2 { display: flex; gap: 8px; }
-  .box .row2 input { flex: 1; }
+  .box .row2 input, .box .row2 select { flex: 1; }
   .box button { padding: 10px 16px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; margin-top: 4px; }
   .box button.secondary { background: #1565c0; }
+  .box button.danger { background: #c62828; }
   .box textarea { min-height: 120px; }
   details.box summary { cursor: pointer; font-weight: bold; margin-bottom: 8px; font-size: 15px; }
   .hint { font-size: 12px; color: #888; margin-bottom: 8px; }
   .previewTable { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
   .previewTable th, .previewTable td { border: 1px solid #ddd; padding: 4px 6px; }
   .previewTable th { background: #eee; }
+  .miniList { list-style: none; padding: 0; margin: 0; }
+  .miniList li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+  .miniList li button { padding: 4px 10px; font-size: 12px; margin: 0; }
 </style>
 </head>
 <body>
@@ -50,11 +55,61 @@
 
 <div id="dashboard">
   <h1>Price & Stock Dashboard</h1>
-  <p class="sub">Update prices/stock one by one below, or use a Bulk Update section for many items at once.</p>
+  <p class="sub">Manage everything here — dealers, locations, brands, categories, margins, and item prices/stock.</p>
+
+  <details class="box">
+    <summary>Manage Margins (auto-calculates DP from MOP)</summary>
+    <p class="hint">Set a discount % per Brand + Category. Example: Xiaomi Smartphones = 5%, Xiaomi TV = 7.5%, Nothing Smartphones = 4%. Whenever you enter an MOP for an item matching this brand+category, DP fills in automatically as MOP &times; (1 &minus; margin%).</p>
+    <div class="row2">
+      <input type="text" id="marginBrand" placeholder="Brand (e.g. Xiaomi)">
+      <input type="text" id="marginCategory" placeholder="Category (e.g. Smartphones)">
+      <input type="number" id="marginPercent" placeholder="Margin %" step="0.1">
+    </div>
+    <button onclick="addMargin()">Save Margin Rule</button>
+    <ul class="miniList" id="marginsList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Brands</summary>
+    <div class="row2">
+      <input type="text" id="newBrandName" placeholder="Brand name">
+      <button onclick="addBrand()" style="width:auto;">Add</button>
+    </div>
+    <ul class="miniList" id="brandsList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Categories</summary>
+    <div class="row2">
+      <input type="text" id="newCategoryName" placeholder="Category name">
+      <button onclick="addCategory()" style="width:auto;">Add</button>
+    </div>
+    <ul class="miniList" id="categoriesList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Locations</summary>
+    <div class="row2">
+      <input type="text" id="newLocationName" placeholder="Location name">
+      <button onclick="addLocation()" style="width:auto;">Add</button>
+    </div>
+    <ul class="miniList" id="locationsList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Dealers</summary>
+    <input type="text" id="newDealerName" placeholder="Dealer name">
+    <div class="row2">
+      <select id="newDealerLocation"><option value="">Select Location</option></select>
+      <input type="text" id="newDealerMobile" placeholder="Mobile number">
+    </div>
+    <button onclick="addDealer()">Add Dealer</button>
+    <ul class="miniList" id="dealersList"></ul>
+  </details>
 
   <details class="box">
     <summary>Bulk Update: Paste Billing Software Stock Report</summary>
-    <p class="hint">Copy rows directly from your billing software's Excel export (like Stock_report.xlsx) — including all columns, starting from the first data row (skip the header rows). Paste them below. This reads the Item name, Closing Stock Quantity, and Rate/Unit columns automatically, and matches colour variants of the same item together.</p>
+    <p class="hint">Copy rows directly from your billing software's Excel export — including all columns, starting from the first data row (skip the header rows). This reads Item name, Closing Stock Quantity, and Rate/Unit automatically, and combines colour variants of the same item together.</p>
     <textarea id="billingPasteArea" placeholder="1	363	MI 18W DUAL PORT CHARGER (XIAOMI)	INFO	...	101	...	280	..."></textarea>
     <button onclick="previewBillingData()">Preview</button>
     <div id="billingPreviewArea"></div>
@@ -62,11 +117,11 @@
 
   <details class="box">
     <summary>Bulk Update: Simple Format (Paste or CSV)</summary>
-    <p class="hint">Each row needs: Family, Brand, Category, Variant, MOP, DP, Stock — in that order.</p>
+    <p class="hint">Each row: Family, Brand, Category, Variant, MOP, DP, Stock. Leave DP as 0 to auto-calculate from a saved margin rule.</p>
     <button class="secondary" onclick="downloadTemplate()">Download Current Data as Template</button>
     <br><br>
     <p class="hint">Paste rows (tab or comma separated), one item per line:</p>
-    <textarea id="pasteArea" placeholder="Redmi Note 15 5G	Xiaomi	Smartphones	8GB+128GB	26999	25649	10"></textarea>
+    <textarea id="pasteArea" placeholder="Redmi Note 15 5G	Xiaomi	Smartphones	8GB+128GB	26999	0	10"></textarea>
     <button onclick="processPastedData()">Process Pasted Data</button>
     <p class="hint" style="margin-top:16px;">Or upload a CSV file:</p>
     <input type="file" id="csvFileInput" accept=".csv,text/csv">
@@ -77,13 +132,15 @@
     <h2>Add Single New Item</h2>
     <input type="text" id="newFamily" placeholder="Item / Family name (e.g. Redmi Note 15 5G)">
     <div class="row2">
-      <input type="text" id="newBrand" placeholder="Brand (e.g. Xiaomi)">
-      <input type="text" id="newCategory" placeholder="Category (e.g. Smartphones)">
+      <input type="text" id="newBrand" list="brandsDatalist" placeholder="Brand">
+      <input type="text" id="newCategory" list="categoriesDatalist" placeholder="Category">
     </div>
+    <datalist id="brandsDatalist"></datalist>
+    <datalist id="categoriesDatalist"></datalist>
     <input type="text" id="newVariant" placeholder="Variant (e.g. 8GB+128GB, or 'Standard' if none)">
     <div class="row2">
       <input type="number" id="newMop" placeholder="MOP Price">
-      <input type="number" id="newDp" placeholder="DP Price">
+      <input type="number" id="newDp" placeholder="DP Price (auto-fills if margin set)">
       <input type="number" id="newStock" placeholder="Stock Qty">
     </div>
     <button onclick="addNewItem()">Add Item</button>
@@ -111,6 +168,13 @@
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
+
+  <details class="box" style="margin-top: 30px;">
+    <summary style="color:#c62828;">Danger Zone</summary>
+    <p class="hint">This permanently deletes ALL items from the cloud. Use this to clean up a bad import (like pasted data landing in the wrong box). Type DELETE to confirm.</p>
+    <input type="text" id="dangerConfirm" placeholder="Type DELETE to confirm">
+    <button class="danger" onclick="clearAllItems()">Clear All Items From Cloud</button>
+  </details>
 </div>
 
 <script>
@@ -125,13 +189,14 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
-  const DASHBOARD_PASSWORD = "C37eofd69#";
+  const DASHBOARD_PASSWORD = "1234";
 
   function tryLogin() {
     const val = document.getElementById('passwordInput').value;
     if (val === DASHBOARD_PASSWORD) {
       document.getElementById('loginBox').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
+      loadMasterData();
       loadData();
     } else {
       alert('Wrong password');
@@ -153,7 +218,170 @@
       .replace(/(\d)g\b/gi, '$1G');
   }
 
-  // ---------- Single Add ----------
+  // ---------- Master Data: Brands, Categories, Locations, Dealers, Margins ----------
+  let brandsCache = [];
+  let categoriesCache = [];
+  let locationsCache = [];
+  let dealersCache = [];
+  let marginsMap = {};
+
+  function loadMasterData() {
+    db.collection('brands').get().then(snap => {
+      brandsCache = [];
+      snap.forEach(doc => brandsCache.push({ id: doc.id, name: doc.data().name || '' }));
+      brandsCache.sort((a, b) => a.name.localeCompare(b.name));
+      renderMiniList('brandsList', brandsCache, deleteBrand);
+      const dl = document.getElementById('brandsDatalist');
+      dl.innerHTML = brandsCache.map(b => `<option value="${b.name}">`).join('');
+    });
+
+    db.collection('categories').get().then(snap => {
+      categoriesCache = [];
+      snap.forEach(doc => categoriesCache.push({ id: doc.id, name: doc.data().name || '' }));
+      categoriesCache.sort((a, b) => a.name.localeCompare(b.name));
+      renderMiniList('categoriesList', categoriesCache, deleteCategory);
+      const dl = document.getElementById('categoriesDatalist');
+      dl.innerHTML = categoriesCache.map(c => `<option value="${c.name}">`).join('');
+    });
+
+    db.collection('locations').get().then(snap => {
+      locationsCache = [];
+      snap.forEach(doc => locationsCache.push({ id: doc.id, name: doc.data().name || '' }));
+      locationsCache.sort((a, b) => a.name.localeCompare(b.name));
+      renderMiniList('locationsList', locationsCache, deleteLocation);
+      const sel = document.getElementById('newDealerLocation');
+      sel.innerHTML = '<option value="">Select Location</option>' + locationsCache.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
+    });
+
+    db.collection('dealers').get().then(snap => {
+      dealersCache = [];
+      snap.forEach(doc => dealersCache.push({ id: doc.id, ...doc.data() }));
+      dealersCache.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      const ul = document.getElementById('dealersList');
+      ul.innerHTML = dealersCache.map(d =>
+        `<li><span>${d.name} — ${d.location || 'No location'} — ${d.mobile || ''}</span><button class="rowDeleteBtn" onclick="deleteDealer('${d.id}')">Delete</button></li>`
+      ).join('');
+    });
+
+    db.collection('margins').get().then(snap => {
+      marginsMap = {};
+      const ul = document.getElementById('marginsList');
+      let html = '';
+      snap.forEach(doc => {
+        const d = doc.data();
+        const key = sanitize(d.brand) + '__' + sanitize(d.category);
+        marginsMap[key] = d.marginPercent;
+        html += `<li><span>${d.brand} + ${d.category} = ${d.marginPercent}%</span><button class="rowDeleteBtn" onclick="deleteMargin('${doc.id}')">Delete</button></li>`;
+      });
+      ul.innerHTML = html;
+    });
+  }
+
+  function renderMiniList(elementId, items, deleteFn) {
+    const ul = document.getElementById(elementId);
+    ul.innerHTML = items.map(item =>
+      `<li><span>${item.name}</span><button class="rowDeleteBtn" onclick="${deleteFn.name}('${item.id}')">Delete</button></li>`
+    ).join('');
+  }
+
+  function addBrand() {
+    const name = document.getElementById('newBrandName').value.trim();
+    if (!name) return;
+    db.collection('brands').doc(sanitize(name)).set({ name }, { merge: true }).then(() => {
+      document.getElementById('newBrandName').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteBrand(id) {
+    db.collection('brands').doc(id).delete().then(loadMasterData);
+  }
+
+  function addCategory() {
+    const name = document.getElementById('newCategoryName').value.trim();
+    if (!name) return;
+    db.collection('categories').doc(sanitize(name)).set({ name }, { merge: true }).then(() => {
+      document.getElementById('newCategoryName').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteCategory(id) {
+    db.collection('categories').doc(id).delete().then(loadMasterData);
+  }
+
+  function addLocation() {
+    const name = document.getElementById('newLocationName').value.trim();
+    if (!name) return;
+    db.collection('locations').doc(sanitize(name)).set({ name }, { merge: true }).then(() => {
+      document.getElementById('newLocationName').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteLocation(id) {
+    db.collection('locations').doc(id).delete().then(loadMasterData);
+  }
+
+  function addDealer() {
+    const name = document.getElementById('newDealerName').value.trim();
+    const location = document.getElementById('newDealerLocation').value;
+    const mobile = document.getElementById('newDealerMobile').value.trim();
+    if (!name) { alert('Dealer name required'); return; }
+    const docId = sanitize(name) + '__' + sanitize(mobile || Date.now().toString());
+    db.collection('dealers').doc(docId).set({ name, location, mobile }, { merge: true }).then(() => {
+      document.getElementById('newDealerName').value = '';
+      document.getElementById('newDealerMobile').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteDealer(id) {
+    db.collection('dealers').doc(id).delete().then(loadMasterData);
+  }
+
+  function addMargin() {
+    const brand = document.getElementById('marginBrand').value.trim();
+    const category = document.getElementById('marginCategory').value.trim();
+    const marginPercent = parseFloat(document.getElementById('marginPercent').value);
+    if (!brand || !category || isNaN(marginPercent)) {
+      alert('Brand, Category and Margin % are all required.');
+      return;
+    }
+    const docId = sanitize(brand) + '__' + sanitize(category);
+    db.collection('margins').doc(docId).set({ brand, category, marginPercent }, { merge: true }).then(() => {
+      document.getElementById('marginBrand').value = '';
+      document.getElementById('marginCategory').value = '';
+      document.getElementById('marginPercent').value = '';
+      loadMasterData();
+      setStatus('Margin rule saved.');
+    });
+  }
+  function deleteMargin(id) {
+    db.collection('margins').doc(id).delete().then(loadMasterData);
+  }
+
+  function calcDp(mop, brand, category) {
+    const key = sanitize(brand) + '__' + sanitize(category);
+    const margin = marginsMap[key];
+    if (margin === undefined || !mop) return null;
+    return Math.round(mop * (1 - margin / 100) * 100) / 100;
+  }
+
+  // ---------- Add Single Item (with auto DP) ----------
+  let addItemLastAutoDp = null;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const mopField = document.getElementById('newMop');
+    const dpField = document.getElementById('newDp');
+    mopField.addEventListener('input', () => {
+      const mop = parseFloat(mopField.value);
+      const brand = document.getElementById('newBrand').value.trim();
+      const category = document.getElementById('newCategory').value.trim();
+      const auto = calcDp(mop, brand, category);
+      if (auto !== null && (dpField.value === '' || parseFloat(dpField.value) === addItemLastAutoDp)) {
+        dpField.value = auto;
+        addItemLastAutoDp = auto;
+      }
+    });
+  });
+
   function addNewItem() {
     const family = document.getElementById('newFamily').value.trim();
     const brand = document.getElementById('newBrand').value.trim();
@@ -167,6 +395,9 @@
       alert('Item name and Variant are required.');
       return;
     }
+
+    if (brand) db.collection('brands').doc(sanitize(brand)).set({ name: brand }, { merge: true });
+    if (category) db.collection('categories').doc(sanitize(category)).set({ name: category }, { merge: true });
 
     const docId = sanitize(family) + '__' + sanitize(variant);
     setStatus('Adding item...');
@@ -183,6 +414,8 @@
       document.getElementById('newMop').value = '';
       document.getElementById('newDp').value = '';
       document.getElementById('newStock').value = '';
+      addItemLastAutoDp = null;
+      loadMasterData();
       loadData();
     }).catch(err => {
       setStatus('Add failed: ' + err.message);
@@ -200,10 +433,15 @@
       const [family, brand, category, variant, mop, dp, stock] = parts;
       if (!family || !variant) continue;
       if (family.toLowerCase() === 'family') continue;
+      const mopVal = parseFloat(mop) || 0;
+      let dpVal = parseFloat(dp) || 0;
+      if (dpVal === 0) {
+        const auto = calcDp(mopVal, brand, category);
+        if (auto !== null) dpVal = auto;
+      }
       rows.push({
         family, brand, category, variant,
-        mop: parseFloat(mop) || 0,
-        dp: parseFloat(dp) || 0,
+        mop: mopVal, dp: dpVal,
         stockQty: parseInt(stock) || 0
       });
     }
@@ -316,10 +554,8 @@
       if (cols.length < 14) return;
       const itemName = (cols[2] || '').trim();
       if (!itemName || itemName.toLowerCase() === 'item') return;
-      const qtyRaw = cols[9];
-      const rateRaw = cols[13];
-      const qty = parseInt(qtyRaw) || 0;
-      const rate = parseFloat(rateRaw) || 0;
+      const qty = parseInt(cols[9]) || 0;
+      const rate = parseFloat(cols[13]) || 0;
       if (qty <= 0 && rate <= 0) return;
 
       const parsed = parseBillingItemName(itemName);
@@ -336,7 +572,7 @@
 
     const previewDiv = document.getElementById('billingPreviewArea');
     if (billingPreviewRows.length === 0) {
-      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header.</p>';
+      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header — and that you pasted here, not in the Simple Format box below.</p>';
       return;
     }
 
@@ -421,8 +657,8 @@
         <td>${d.brand}</td>
         <td>${d.category}</td>
         <td>${d.variant}</td>
-        <td><input class="editField" type="number" value="${d.mop}" data-id="${d.id}" data-field="mop"></td>
-        <td><input class="editField" type="number" value="${d.dp}" data-id="${d.id}" data-field="dp"></td>
+        <td><input class="editField" type="number" value="${d.mop}" data-id="${d.id}" data-field="mop" data-brand="${d.brand}" data-category="${d.category}"></td>
+        <td><input class="editField" type="number" value="${d.dp}" data-id="${d.id}" data-field="dp" data-autodp=""></td>
         <td><input class="editField" type="number" value="${d.stockQty}" data-id="${d.id}" data-field="stockQty"></td>
         <td><button class="rowSaveBtn" onclick="saveRow('${d.id}')">Save</button></td>
       `;
@@ -435,6 +671,23 @@
         const field = e.target.dataset.field;
         if (!pendingChanges[id]) pendingChanges[id] = {};
         pendingChanges[id][field] = parseFloat(e.target.value) || 0;
+      });
+    });
+
+    document.querySelectorAll('input[data-field="mop"]').forEach(mopInput => {
+      mopInput.addEventListener('input', () => {
+        const id = mopInput.dataset.id;
+        const brand = mopInput.dataset.brand;
+        const category = mopInput.dataset.category;
+        const dpInput = document.querySelector(`input[data-id="${id}"][data-field="dp"]`);
+        const mop = parseFloat(mopInput.value) || 0;
+        const auto = calcDp(mop, brand, category);
+        if (auto !== null && (dpInput.value === '' || dpInput.value === dpInput.dataset.autodp)) {
+          dpInput.value = auto;
+          dpInput.dataset.autodp = auto;
+          if (!pendingChanges[id]) pendingChanges[id] = {};
+          pendingChanges[id]['dp'] = auto;
+        }
       });
     });
   }
@@ -472,6 +725,37 @@
       Object.keys(pendingChanges).forEach(k => delete pendingChanges[k]);
     }).catch(err => {
       setStatus('Save failed: ' + err.message);
+    });
+  }
+
+  // ---------- Danger Zone ----------
+  function clearAllItems() {
+    const confirmVal = document.getElementById('dangerConfirm').value.trim();
+    if (confirmVal !== 'DELETE') {
+      alert('Type DELETE exactly (all caps) to confirm.');
+      return;
+    }
+    setStatus('Deleting all items...');
+    db.collection('variants').get().then(snapshot => {
+      const docs = snapshot.docs;
+      let index = 0;
+      function deleteChunk() {
+        const chunk = docs.slice(index, index + 400);
+        if (chunk.length === 0) {
+          setStatus('All items cleared.');
+          document.getElementById('dangerConfirm').value = '';
+          loadData();
+          return;
+        }
+        const batch = db.batch();
+        chunk.forEach(doc => batch.delete(doc.ref));
+        batch.commit().then(() => {
+          index += 400;
+          setStatus(`Deleting... ${Math.min(index, docs.length)}/${docs.length}`);
+          deleteChunk();
+        });
+      }
+      deleteChunk();
     });
   }
 </script>
