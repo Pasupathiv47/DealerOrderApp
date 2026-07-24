@@ -22,7 +22,8 @@
   th { background: #222; color: white; position: sticky; top: 0; }
   input.editField { width: 80px; padding: 4px; font-size: 13px; }
   .rowSaveBtn { padding: 6px 10px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
-  .rowDeleteBtn { padding: 6px 10px; background: #c62828; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .rowDeleteBtn { padding: 6px 10px; background: #c62828; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 4px; }
+  .rowEditBtn { padding: 6px 10px; background: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer; }
   .outOfStock { background: #ffe6e6; }
   #saveAllBtn { padding: 10px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; font-size: 14px; margin-bottom: 12px; cursor: pointer; }
   #statusMsg { margin: 8px 0; font-size: 14px; color: #2e7d32; white-space: pre-line; }
@@ -40,7 +41,9 @@
   .previewTable th, .previewTable td { border: 1px solid #ddd; padding: 4px 6px; }
   .previewTable th { background: #eee; }
   .miniList { list-style: none; padding: 0; margin: 0; }
-  .miniList li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+  .miniList li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; gap: 8px; }
+  .miniList li span { flex: 1; }
+  .miniList li .btnGroup { display: flex; flex-shrink: 0; }
   .miniList li button { padding: 4px 10px; font-size: 12px; margin: 0; }
 </style>
 </head>
@@ -55,14 +58,14 @@
 
 <div id="dashboard">
   <h1>Price & Stock Dashboard</h1>
-  <p class="sub">Manage everything here — dealers, locations, brands, categories, margins, and item prices/stock.</p>
+  <p class="sub">Manage everything here — dealers, locations, brands, categories, variants, margins, and item prices/stock.</p>
 
   <details class="box">
     <summary>Manage Margins (auto-calculates DP from MOP)</summary>
-    <p class="hint">Set a discount % per Brand + Category. Example: Xiaomi Smartphones = 5%, Xiaomi TV = 7.5%, Nothing Smartphones = 4%. Whenever you enter an MOP for an item matching this brand+category, DP fills in automatically as MOP &times; (1 &minus; margin%).</p>
+    <p class="hint">Pick a Brand and Category you've already created, then set the discount %. DP will auto-fill as MOP &times; (1 &minus; margin%) wherever this brand+category combination is used.</p>
     <div class="row2">
-      <input type="text" id="marginBrand" placeholder="Brand (e.g. Xiaomi)">
-      <input type="text" id="marginCategory" placeholder="Category (e.g. Smartphones)">
+      <select id="marginBrand"><option value="">Select Brand</option></select>
+      <select id="marginCategory"><option value="">Select Category</option></select>
       <input type="number" id="marginPercent" placeholder="Margin %" step="0.1">
     </div>
     <button onclick="addMargin()">Save Margin Rule</button>
@@ -85,6 +88,27 @@
       <button onclick="addCategory()" style="width:auto;">Add</button>
     </div>
     <ul class="miniList" id="categoriesList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Variant Types</summary>
+    <p class="hint">e.g. "RAM + Storage", "Size", "Voltage" — same idea as in the app.</p>
+    <div class="row2">
+      <input type="text" id="newVariantGroupName" placeholder="Variant type name">
+      <button onclick="addVariantGroup()" style="width:auto;">Add</button>
+    </div>
+    <ul class="miniList" id="variantGroupsList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Variant Options</summary>
+    <p class="hint">Add specific values under a variant type, e.g. under "RAM + Storage": 8GB+128GB, 12GB+256GB.</p>
+    <select id="variantOptionGroupSelect" onchange="renderVariantOptionsList()"><option value="">Select Variant Type</option></select>
+    <div class="row2">
+      <input type="text" id="newVariantOptionName" placeholder="Option value (e.g. 8GB+128GB)">
+      <button onclick="addVariantOption()" style="width:auto;">Add</button>
+    </div>
+    <ul class="miniList" id="variantOptionsList"></ul>
   </details>
 
   <details class="box">
@@ -171,7 +195,7 @@
 
   <details class="box" style="margin-top: 30px;">
     <summary style="color:#c62828;">Danger Zone</summary>
-    <p class="hint">This permanently deletes ALL items from the cloud. Use this to clean up a bad import (like pasted data landing in the wrong box). Type DELETE to confirm.</p>
+    <p class="hint">This permanently deletes ALL items from the cloud. Use this to clean up a bad import. Type DELETE to confirm.</p>
     <input type="text" id="dangerConfirm" placeholder="Type DELETE to confirm">
     <button class="danger" onclick="clearAllItems()">Clear All Items From Cloud</button>
   </details>
@@ -218,37 +242,45 @@
       .replace(/(\d)g\b/gi, '$1G');
   }
 
-  // ---------- Master Data: Brands, Categories, Locations, Dealers, Margins ----------
+  // ---------- Master Data ----------
   let brandsCache = [];
   let categoriesCache = [];
   let locationsCache = [];
   let dealersCache = [];
   let marginsMap = {};
+  let variantGroupsCache = [];
+  let variantOptionsCache = [];
 
   function loadMasterData() {
     db.collection('brands').get().then(snap => {
       brandsCache = [];
       snap.forEach(doc => brandsCache.push({ id: doc.id, name: doc.data().name || '' }));
       brandsCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('brandsList', brandsCache, deleteBrand);
-      const dl = document.getElementById('brandsDatalist');
-      dl.innerHTML = brandsCache.map(b => `<option value="${b.name}">`).join('');
+      renderMiniList('brandsList', brandsCache, 'deleteBrand', null);
+      document.getElementById('brandsDatalist').innerHTML = brandsCache.map(b => `<option value="${b.name}">`).join('');
+      const marginBrandSel = document.getElementById('marginBrand');
+      const prevVal = marginBrandSel.value;
+      marginBrandSel.innerHTML = '<option value="">Select Brand</option>' + brandsCache.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
+      marginBrandSel.value = prevVal;
     });
 
     db.collection('categories').get().then(snap => {
       categoriesCache = [];
       snap.forEach(doc => categoriesCache.push({ id: doc.id, name: doc.data().name || '' }));
       categoriesCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('categoriesList', categoriesCache, deleteCategory);
-      const dl = document.getElementById('categoriesDatalist');
-      dl.innerHTML = categoriesCache.map(c => `<option value="${c.name}">`).join('');
+      renderMiniList('categoriesList', categoriesCache, 'deleteCategory', null);
+      document.getElementById('categoriesDatalist').innerHTML = categoriesCache.map(c => `<option value="${c.name}">`).join('');
+      const marginCatSel = document.getElementById('marginCategory');
+      const prevVal = marginCatSel.value;
+      marginCatSel.innerHTML = '<option value="">Select Category</option>' + categoriesCache.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      marginCatSel.value = prevVal;
     });
 
     db.collection('locations').get().then(snap => {
       locationsCache = [];
       snap.forEach(doc => locationsCache.push({ id: doc.id, name: doc.data().name || '' }));
       locationsCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('locationsList', locationsCache, deleteLocation);
+      renderMiniList('locationsList', locationsCache, 'deleteLocation', null);
       const sel = document.getElementById('newDealerLocation');
       sel.innerHTML = '<option value="">Select Location</option>' + locationsCache.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
     });
@@ -259,7 +291,11 @@
       dealersCache.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       const ul = document.getElementById('dealersList');
       ul.innerHTML = dealersCache.map(d =>
-        `<li><span>${d.name} — ${d.location || 'No location'} — ${d.mobile || ''}</span><button class="rowDeleteBtn" onclick="deleteDealer('${d.id}')">Delete</button></li>`
+        `<li><span>${d.name} — ${d.location || 'No location'} — ${d.mobile || ''}</span>
+         <span class="btnGroup">
+           <button class="rowEditBtn" onclick="editDealer('${d.id}')">Edit</button>
+           <button class="rowDeleteBtn" onclick="deleteDealer('${d.id}')">Delete</button>
+         </span></li>`
       ).join('');
     });
 
@@ -275,12 +311,46 @@
       });
       ul.innerHTML = html;
     });
+
+    db.collection('variantGroups').get().then(snap => {
+      variantGroupsCache = [];
+      snap.forEach(doc => variantGroupsCache.push({ id: doc.id, name: doc.data().name || '' }));
+      variantGroupsCache.sort((a, b) => a.name.localeCompare(b.name));
+      renderMiniList('variantGroupsList', variantGroupsCache, 'deleteVariantGroup', null);
+      const sel = document.getElementById('variantOptionGroupSelect');
+      const prevVal = sel.value;
+      sel.innerHTML = '<option value="">Select Variant Type</option>' + variantGroupsCache.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+      sel.value = prevVal;
+    });
+
+    db.collection('variantOptions').get().then(snap => {
+      variantOptionsCache = [];
+      snap.forEach(doc => variantOptionsCache.push({ id: doc.id, ...doc.data() }));
+      renderVariantOptionsList();
+    });
   }
 
-  function renderMiniList(elementId, items, deleteFn) {
+  function renderMiniList(elementId, items, deleteFnName) {
     const ul = document.getElementById(elementId);
     ul.innerHTML = items.map(item =>
-      `<li><span>${item.name}</span><button class="rowDeleteBtn" onclick="${deleteFn.name}('${item.id}')">Delete</button></li>`
+      `<li><span>${item.name}</span><button class="rowDeleteBtn" onclick="${deleteFnName}('${item.id}')">Delete</button></li>`
+    ).join('');
+  }
+
+  function renderVariantOptionsList() {
+    const selectedGroup = document.getElementById('variantOptionGroupSelect').value;
+    const ul = document.getElementById('variantOptionsList');
+    if (!selectedGroup) {
+      ul.innerHTML = '<li><span>Select a variant type above to see its options.</span></li>';
+      return;
+    }
+    const filtered = variantOptionsCache.filter(o => o.groupName === selectedGroup);
+    if (filtered.length === 0) {
+      ul.innerHTML = '<li><span>No options yet for this type.</span></li>';
+      return;
+    }
+    ul.innerHTML = filtered.map(o =>
+      `<li><span>${o.name}</span><button class="rowDeleteBtn" onclick="deleteVariantOption('${o.id}')">Delete</button></li>`
     ).join('');
   }
 
@@ -308,6 +378,33 @@
     db.collection('categories').doc(id).delete().then(loadMasterData);
   }
 
+  function addVariantGroup() {
+    const name = document.getElementById('newVariantGroupName').value.trim();
+    if (!name) return;
+    db.collection('variantGroups').doc(sanitize(name)).set({ name }, { merge: true }).then(() => {
+      document.getElementById('newVariantGroupName').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteVariantGroup(id) {
+    db.collection('variantGroups').doc(id).delete().then(loadMasterData);
+  }
+
+  function addVariantOption() {
+    const groupName = document.getElementById('variantOptionGroupSelect').value;
+    const name = document.getElementById('newVariantOptionName').value.trim();
+    if (!groupName) { alert('Select a variant type first.'); return; }
+    if (!name) { alert('Enter an option value.'); return; }
+    const docId = sanitize(groupName) + '__' + sanitize(name);
+    db.collection('variantOptions').doc(docId).set({ groupName, name }, { merge: true }).then(() => {
+      document.getElementById('newVariantOptionName').value = '';
+      loadMasterData();
+    });
+  }
+  function deleteVariantOption(id) {
+    db.collection('variantOptions').doc(id).delete().then(loadMasterData);
+  }
+
   function addLocation() {
     const name = document.getElementById('newLocationName').value.trim();
     if (!name) return;
@@ -332,22 +429,36 @@
       loadMasterData();
     });
   }
+  function editDealer(id) {
+    const dealer = dealersCache.find(d => d.id === id);
+    if (!dealer) return;
+    const newName = prompt('Dealer name:', dealer.name || '');
+    if (newName === null) return;
+    const newLocation = prompt('Location:', dealer.location || '');
+    if (newLocation === null) return;
+    const newMobile = prompt('Mobile number:', dealer.mobile || '');
+    if (newMobile === null) return;
+    db.collection('dealers').doc(id).set({
+      name: newName.trim(), location: newLocation.trim(), mobile: newMobile.trim()
+    }, { merge: true }).then(() => {
+      setStatus('Dealer updated.');
+      loadMasterData();
+    });
+  }
   function deleteDealer(id) {
     db.collection('dealers').doc(id).delete().then(loadMasterData);
   }
 
   function addMargin() {
-    const brand = document.getElementById('marginBrand').value.trim();
-    const category = document.getElementById('marginCategory').value.trim();
+    const brand = document.getElementById('marginBrand').value;
+    const category = document.getElementById('marginCategory').value;
     const marginPercent = parseFloat(document.getElementById('marginPercent').value);
     if (!brand || !category || isNaN(marginPercent)) {
-      alert('Brand, Category and Margin % are all required.');
+      alert('Select a Brand, a Category, and enter a Margin % — all are required.');
       return;
     }
     const docId = sanitize(brand) + '__' + sanitize(category);
     db.collection('margins').doc(docId).set({ brand, category, marginPercent }, { merge: true }).then(() => {
-      document.getElementById('marginBrand').value = '';
-      document.getElementById('marginCategory').value = '';
       document.getElementById('marginPercent').value = '';
       loadMasterData();
       setStatus('Margin rule saved.');
@@ -572,7 +683,7 @@
 
     const previewDiv = document.getElementById('billingPreviewArea');
     if (billingPreviewRows.length === 0) {
-      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header — and that you pasted here, not in the Simple Format box below.</p>';
+      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header.</p>';
       return;
     }
 
