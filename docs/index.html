@@ -62,7 +62,7 @@
 
   <details class="box">
     <summary>Manage Margins (auto-calculates DP from MOP)</summary>
-    <p class="hint">Pick a Brand and Category you've already created, then set the discount %. DP will auto-fill as MOP &times; (1 &minus; margin%) wherever this brand+category combination is used.</p>
+    <p class="hint">Pick a Brand and Category you've already created, then set the discount %. DP will auto-fill as MOP &times; (1 &minus; margin%).</p>
     <div class="row2">
       <select id="marginBrand"><option value="">Select Brand</option></select>
       <select id="marginCategory"><option value="">Select Category</option></select>
@@ -82,17 +82,8 @@
   </details>
 
   <details class="box">
-    <summary>Manage Categories</summary>
-    <div class="row2">
-      <input type="text" id="newCategoryName" placeholder="Category name">
-      <button onclick="addCategory()" style="width:auto;">Add</button>
-    </div>
-    <ul class="miniList" id="categoriesList"></ul>
-  </details>
-
-  <details class="box">
     <summary>Manage Variant Types</summary>
-    <p class="hint">e.g. "RAM + Storage", "Size", "Voltage" — same idea as in the app.</p>
+    <p class="hint">e.g. "RAM + Storage", "Size", "Voltage". Create these before linking them to a Category below.</p>
     <div class="row2">
       <input type="text" id="newVariantGroupName" placeholder="Variant type name">
       <button onclick="addVariantGroup()" style="width:auto;">Add</button>
@@ -109,6 +100,17 @@
       <button onclick="addVariantOption()" style="width:auto;">Add</button>
     </div>
     <ul class="miniList" id="variantOptionsList"></ul>
+  </details>
+
+  <details class="box">
+    <summary>Manage Categories</summary>
+    <p class="hint">Link each category to a Variant Type so items under it can suggest the right variant values (e.g. Smartphones → RAM + Storage).</p>
+    <div class="row2">
+      <input type="text" id="newCategoryName" placeholder="Category name">
+      <select id="newCategoryVariantGroup"><option value="">No Variants</option></select>
+    </div>
+    <button onclick="addCategory()">Add / Update Category</button>
+    <ul class="miniList" id="categoriesList"></ul>
   </details>
 
   <details class="box">
@@ -133,7 +135,7 @@
 
   <details class="box">
     <summary>Bulk Update: Paste Billing Software Stock Report</summary>
-    <p class="hint">Copy rows directly from your billing software's Excel export — including all columns, starting from the first data row (skip the header rows). This reads Item name, Closing Stock Quantity, and Rate/Unit automatically, and combines colour variants of the same item together.</p>
+    <p class="hint">Copy rows directly from your billing software's Excel export — including all columns, starting from the first data row (skip the header rows).</p>
     <textarea id="billingPasteArea" placeholder="1	363	MI 18W DUAL PORT CHARGER (XIAOMI)	INFO	...	101	...	280	..."></textarea>
     <button onclick="previewBillingData()">Preview</button>
     <div id="billingPreviewArea"></div>
@@ -161,7 +163,9 @@
     </div>
     <datalist id="brandsDatalist"></datalist>
     <datalist id="categoriesDatalist"></datalist>
-    <input type="text" id="newVariant" placeholder="Variant (e.g. 8GB+128GB, or 'Standard' if none)">
+    <input type="text" id="newVariant" list="newVariantDatalist" placeholder="Variant (type a category above to see suggestions)">
+    <datalist id="newVariantDatalist"></datalist>
+    <p class="hint" id="variantHint"></p>
     <div class="row2">
       <input type="number" id="newMop" placeholder="MOP Price">
       <input type="number" id="newDp" placeholder="DP Price (auto-fills if margin set)">
@@ -195,7 +199,7 @@
 
   <details class="box" style="margin-top: 30px;">
     <summary style="color:#c62828;">Danger Zone</summary>
-    <p class="hint">This permanently deletes ALL items from the cloud. Use this to clean up a bad import. Type DELETE to confirm.</p>
+    <p class="hint">This permanently deletes ALL items from the cloud. Type DELETE to confirm.</p>
     <input type="text" id="dangerConfirm" placeholder="Type DELETE to confirm">
     <button class="danger" onclick="clearAllItems()">Clear All Items From Cloud</button>
   </details>
@@ -256,7 +260,7 @@
       brandsCache = [];
       snap.forEach(doc => brandsCache.push({ id: doc.id, name: doc.data().name || '' }));
       brandsCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('brandsList', brandsCache, 'deleteBrand', null);
+      renderMiniList('brandsList', brandsCache, 'deleteBrand');
       document.getElementById('brandsDatalist').innerHTML = brandsCache.map(b => `<option value="${b.name}">`).join('');
       const marginBrandSel = document.getElementById('marginBrand');
       const prevVal = marginBrandSel.value;
@@ -264,23 +268,46 @@
       marginBrandSel.value = prevVal;
     });
 
+    db.collection('variantGroups').get().then(snap => {
+      variantGroupsCache = [];
+      snap.forEach(doc => variantGroupsCache.push({ id: doc.id, name: doc.data().name || '' }));
+      variantGroupsCache.sort((a, b) => a.name.localeCompare(b.name));
+      renderMiniList('variantGroupsList', variantGroupsCache, 'deleteVariantGroup');
+      const optSel = document.getElementById('variantOptionGroupSelect');
+      const prevOpt = optSel.value;
+      optSel.innerHTML = '<option value="">Select Variant Type</option>' + variantGroupsCache.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+      optSel.value = prevOpt;
+      const catGroupSel = document.getElementById('newCategoryVariantGroup');
+      const prevCatGroup = catGroupSel.value;
+      catGroupSel.innerHTML = '<option value="">No Variants</option>' + variantGroupsCache.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+      catGroupSel.value = prevCatGroup;
+    });
+
     db.collection('categories').get().then(snap => {
       categoriesCache = [];
-      snap.forEach(doc => categoriesCache.push({ id: doc.id, name: doc.data().name || '' }));
+      snap.forEach(doc => categoriesCache.push({ id: doc.id, name: doc.data().name || '', variantGroupName: doc.data().variantGroupName || '' }));
       categoriesCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('categoriesList', categoriesCache, 'deleteCategory', null);
+      const ul = document.getElementById('categoriesList');
+      ul.innerHTML = categoriesCache.map(c =>
+        `<li><span>${c.name} ${c.variantGroupName ? '— ' + c.variantGroupName : '— No Variants'}</span>
+         <span class="btnGroup">
+           <button class="rowEditBtn" onclick="editCategory('${c.id}')">Edit</button>
+           <button class="rowDeleteBtn" onclick="deleteCategory('${c.id}')">Delete</button>
+         </span></li>`
+      ).join('');
       document.getElementById('categoriesDatalist').innerHTML = categoriesCache.map(c => `<option value="${c.name}">`).join('');
       const marginCatSel = document.getElementById('marginCategory');
       const prevVal = marginCatSel.value;
       marginCatSel.innerHTML = '<option value="">Select Category</option>' + categoriesCache.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
       marginCatSel.value = prevVal;
+      updateVariantSuggestions();
     });
 
     db.collection('locations').get().then(snap => {
       locationsCache = [];
       snap.forEach(doc => locationsCache.push({ id: doc.id, name: doc.data().name || '' }));
       locationsCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('locationsList', locationsCache, 'deleteLocation', null);
+      renderMiniList('locationsList', locationsCache, 'deleteLocation');
       const sel = document.getElementById('newDealerLocation');
       sel.innerHTML = '<option value="">Select Location</option>' + locationsCache.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
     });
@@ -312,21 +339,11 @@
       ul.innerHTML = html;
     });
 
-    db.collection('variantGroups').get().then(snap => {
-      variantGroupsCache = [];
-      snap.forEach(doc => variantGroupsCache.push({ id: doc.id, name: doc.data().name || '' }));
-      variantGroupsCache.sort((a, b) => a.name.localeCompare(b.name));
-      renderMiniList('variantGroupsList', variantGroupsCache, 'deleteVariantGroup', null);
-      const sel = document.getElementById('variantOptionGroupSelect');
-      const prevVal = sel.value;
-      sel.innerHTML = '<option value="">Select Variant Type</option>' + variantGroupsCache.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
-      sel.value = prevVal;
-    });
-
     db.collection('variantOptions').get().then(snap => {
       variantOptionsCache = [];
       snap.forEach(doc => variantOptionsCache.push({ id: doc.id, ...doc.data() }));
       renderVariantOptionsList();
+      updateVariantSuggestions();
     });
   }
 
@@ -354,6 +371,33 @@
     ).join('');
   }
 
+  // ---------- Variant suggestions on Add Item form ----------
+  function updateVariantSuggestions() {
+    const categoryTyped = document.getElementById('newCategory').value.trim();
+    const datalist = document.getElementById('newVariantDatalist');
+    const hint = document.getElementById('variantHint');
+    if (!categoryTyped) {
+      datalist.innerHTML = '';
+      hint.textContent = '';
+      return;
+    }
+    const match = categoriesCache.find(c => c.name.toLowerCase() === categoryTyped.toLowerCase());
+    if (!match || !match.variantGroupName) {
+      datalist.innerHTML = '';
+      hint.textContent = match ? 'This category has no variant type set — type any value (e.g. "Standard").' : 'Category not found yet — variant suggestions will appear once it matches an existing category.';
+      return;
+    }
+    const options = variantOptionsCache.filter(o => o.groupName === match.variantGroupName);
+    datalist.innerHTML = options.map(o => `<option value="${o.name}">`).join('');
+    hint.textContent = options.length > 0
+      ? `Suggestions loaded from "${match.variantGroupName}" (${options.length} option${options.length === 1 ? '' : 's'}).`
+      : `Category uses "${match.variantGroupName}" but no options exist yet — add some in Manage Variant Options.`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('newCategory').addEventListener('input', updateVariantSuggestions);
+  });
+
   function addBrand() {
     const name = document.getElementById('newBrandName').value.trim();
     if (!name) return;
@@ -368,9 +412,22 @@
 
   function addCategory() {
     const name = document.getElementById('newCategoryName').value.trim();
+    const variantGroupName = document.getElementById('newCategoryVariantGroup').value;
     if (!name) return;
-    db.collection('categories').doc(sanitize(name)).set({ name }, { merge: true }).then(() => {
+    db.collection('categories').doc(sanitize(name)).set({ name, variantGroupName }, { merge: true }).then(() => {
       document.getElementById('newCategoryName').value = '';
+      document.getElementById('newCategoryVariantGroup').value = '';
+      loadMasterData();
+    });
+  }
+  function editCategory(id) {
+    const cat = categoriesCache.find(c => c.id === id);
+    if (!cat) return;
+    const typeList = variantGroupsCache.map(g => g.name).join(', ') || '(none created yet)';
+    const input = prompt(`Variant type for "${cat.name}"?\nAvailable: ${typeList}\nLeave blank for No Variants.`, cat.variantGroupName || '');
+    if (input === null) return;
+    db.collection('categories').doc(id).set({ name: cat.name, variantGroupName: input.trim() }, { merge: true }).then(() => {
+      setStatus('Category updated.');
       loadMasterData();
     });
   }
@@ -526,6 +583,7 @@
       document.getElementById('newDp').value = '';
       document.getElementById('newStock').value = '';
       addItemLastAutoDp = null;
+      updateVariantSuggestions();
       loadMasterData();
       loadData();
     }).catch(err => {
@@ -683,11 +741,11 @@
 
     const previewDiv = document.getElementById('billingPreviewArea');
     if (billingPreviewRows.length === 0) {
-      previewDiv.innerHTML = '<p class="hint">No valid rows detected. Make sure you pasted full rows (all columns) starting from the data, not the header.</p>';
+      previewDiv.innerHTML = '<p class="hint">No valid rows detected.</p>';
       return;
     }
 
-    let html = `<p class="hint">${billingPreviewRows.length} item(s) detected (colours combined into total stock per variant). Review below, then confirm.</p>`;
+    let html = `<p class="hint">${billingPreviewRows.length} item(s) detected. Review below, then confirm.</p>`;
     html += '<table class="previewTable"><tr><th>Family</th><th>Brand</th><th>Variant</th><th>Stock</th><th>Rate (DP)</th></tr>';
     billingPreviewRows.forEach(r => {
       html += `<tr><td>${r.family}</td><td>${r.brand}</td><td>${r.variant}</td><td>${r.stockQty}</td><td>${r.dp}</td></tr>`;
